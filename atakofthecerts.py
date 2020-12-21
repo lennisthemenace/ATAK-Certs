@@ -9,15 +9,20 @@ VERSION = 0.3
 HOME = "."
 help_txt = "This Python script is to be used to generate the certificate files needed for \n" \
            "FTS Version 1.3 and above to allow for SSL/TLS connections between Server and \n" \
-           "Client.\n" \
+           "Client.\n\n" \
            "This script works in the current working directory (the folder you are \n" \
-           "currently in)\n"\
+           "currently in)\n\n"\
            "The .p12 files generated will need to be copied to ATAK clients\n" \
            "the default password set on the .p12 files is atakatak\n" \
            "The Server .key and .crt file will ne needed on the FTS server as per the MainConfig.py\n" \
            "The ca.crt is also needed for the MainConfig.py\n"\
-           "the default password set on the .p12 files is atakatak, this can be overridden\n" \
-           "with -p when running this script"
+           "the default password set on the .p12 files is atakatak, this can be overridden\n\n" \
+           "Arguments:\n" \
+           "-h --help : to open help\n" \
+           "-v --version : to print the version number of the script\n" \
+           "-p --password : to change the password for the p12 files from the default atakatak\n" \
+           "-a --automated : to run the script in a headless mode to auto generate ca,server and user certs " \
+           "for a fresh install\n\n"
 key = crypto.PKey()
 CERTPWD = "atakatak"
 AUTO = False
