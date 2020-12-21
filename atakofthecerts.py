@@ -5,8 +5,7 @@ import getopt
 import sys
 import random
 
-VERSION = 0.2
-#HOME = os.getenv("HOME")
+VERSION = 0.3
 HOME = "."
 help_txt = "This Python script is to be used to generate the certificate files needed for \n" \
            "FTS Version 1.3 and above to allow for SSL/TLS connections between Server and \n" \
@@ -21,10 +20,11 @@ help_txt = "This Python script is to be used to generate the certificate files n
            "with -p when running this script"
 key = crypto.PKey()
 CERTPWD = "atakatak"
+AUTO = False
 cmd_args = sys.argv
 arg_list = cmd_args[1:]
-stort_opts = "vhp:"
-long_opts = "--p--help"
+stort_opts = "avhp:"
+long_opts = ["automated", "version", "help", "password"]
 args, values = getopt.getopt(arg_list, stort_opts, long_opts)
 for current_arg, current_val in args:
     if current_arg in ("-h", "--help"):
@@ -33,6 +33,8 @@ for current_arg, current_val in args:
         print(VERSION)
     if current_arg in ("-p", "--password"):
         CERTPWD = current_val
+    if current_arg in ("-a", "--automated"):
+        AUTO = True
 
 
 cakeypath = f"{HOME}/ca.key"
@@ -40,31 +42,31 @@ cacrtpath = f"{HOME}/ca.crt"
 
 
 def generate_ca():
-    k = crypto.PKey()
-    k.generate_key(crypto.TYPE_RSA, 2048)
+    ca_key = crypto.PKey()
+    ca_key.generate_key(crypto.TYPE_RSA, 2048)
     cert = crypto.X509()
     cert.get_subject().CN = "CA"
     cert.set_serial_number(0)
     cert.set_version(2)
     cert.gmtime_adj_notBefore(0)
-    cert.gmtime_adj_notAfter(31536000)  # 315360000 is in seconds.
+    cert.gmtime_adj_notAfter(31536000)
     cert.set_issuer(cert.get_subject())
     cert.add_extensions([crypto.X509Extension(b'basicConstraints', False, b'CA:TRUE'), crypto.X509Extension(b'keyUsage', False, b'keyCertSign, cRLSign')])
-    cert.set_pubkey(k)
-    cert.sign(k, 'sha256')
+    cert.set_pubkey(ca_key)
+    cert.sign(ca_key, 'sha256')
 
     f = open(cakeypath, "wb")
-    f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, k))
+    f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, ca_key))
     f.close()
-    print("CA key Stored Here :" + cakeypath)
+    print("CA key Stored Here: " + cakeypath)
 
     f = open(cacrtpath, "wb")
     f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
     f.close()
-    print("CA crt Stored Here :" + cacrtpath)
+    print("CA crt Stored Here: " + cacrtpath)
 
 
-def generate_key():
+def generate_key(keypath):
     if os.path.exists(keypath):
         print("Certificate file exists, aborting.")
         print(keypath)
@@ -75,10 +77,10 @@ def generate_key():
         f = open(keypath, "wb")
         f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
         f.close()
-        print("Key Stored Here :" + keypath)
+        print("Key Stored Here: " + keypath)
 
 
-def generate_certificate(cn):
+def generate_certificate(cn, crtpath, p12path):
     cakey = crypto.load_privatekey(crypto.FILETYPE_PEM, open(cakeypath).read())
     cacrt = crypto.load_certificate(crypto.FILETYPE_PEM, open(cacrtpath, 'rb').read())
     serialnumber = random.getrandbits(64)
@@ -99,7 +101,7 @@ def generate_certificate(cn):
     p12data = p12.export(passphrase=bytes(CERTPWD, encoding='UTF-8'))
     with open(p12path, 'wb') as p12file:
         p12file.write(p12data)
-        print("P12 Stored Here :" + p12path)
+        print("P12 Stored Here: " + p12path)
 
     if os.path.exists(crtpath):
         print("Certificate File Exists, aborting.")
@@ -108,24 +110,32 @@ def generate_certificate(cn):
         f = open(crtpath, "wb")
         f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
         f.close()
-        print("CRT Stored Here :" + crtpath)
+        print("CRT Stored Here: " + crtpath)
+
+
+def bake(cn):
+    keypath = f"{HOME}/{cn}.key"
+    crtpath = f"{HOME}/{cn}.crt"
+    p12path = f"{HOME}/{cn}.p12"
+    generate_key(keypath)
+    generate_certificate(cn, crtpath, p12path)
 
 
 if __name__ == '__main__':
     if not os.path.exists(cakeypath):
         print("Cannot find CA locally so generating one")
         generate_ca()
-    while True:
-        cn = input("Enter the DNS Name or IP of FTS or Username for User Cert: ")
-        keypath = f"{HOME}/{cn}.key"
-        csrpath = f"{HOME}/{cn}.csr"
-        crtpath = f"{HOME}/{cn}.crt"
-        p12path = f"{HOME}/{cn}.p12"
-        generate_key()
-        generate_certificate(cn)
-        cont = input("Generate another? y/n")
-        if cont.lower() != "y":
-            break
+    if AUTO:
+        cns = ["pubserver", "user"]
+        for cn in cns:
+            bake(cn)
+    else:
+        while True:
+            cn = input("Enter the DNS Name or IP of FTS or Username for User Cert: ")
+            bake(cn)
+            cont = input("Generate another? y/n")
+            if cont.lower() != "y":
+                break
 
 
 
