@@ -116,10 +116,18 @@ class AtakOfTheCerts:
                 return False
             if not os.path.exists(dest + "/Certs"):
                 os.makedirs(dest + "/Certs")
+            print("Copying ./pubserver.key to :" + dest + "/Certs" + "/pubserver.key")
             copyfile("./pubserver.key", dest + "/Certs" + "/pubserver.key")
+            print("Done")
+            print("Copying ./pubserver.key to :" + dest + "/Certs" + "/pubserver.key.unencrypted")
             copyfile("./pubserver.key", dest + "/Certs" + "/pubserver.key.unencrypted")
+            print("Done")
+            print("Copying ./pubserver.crt to :" + dest + "/Certs" + "/pubserver.pem")
             copyfile("./pubserver.crt", dest + "/Certs" + "/pubserver.pem")
+            print("Done")
+            print("Copying ./ca.crt to :" + dest + "/Certs" + "/ca.pem")
             copyfile("./ca.crt", dest + "/Certs" + "/ca.pem")
+            print("Done")
 
 
 if __name__ == '__main__':
