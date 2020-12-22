@@ -4,6 +4,7 @@ import os
 import getopt
 import sys
 import random
+from shutil import copyfile
 
 
 class AtakOfTheCerts:
@@ -99,14 +100,30 @@ class AtakOfTheCerts:
         self.generate_key(keypath)
         self.generate_certificate(cn, crtpath, p12path)
 
-    def generate_auto_certs(self):
+    def generate_auto_certs(self, copy=False):
         cns = ["pubserver", "user"]
         for cn in cns:
             self.bake(cn)
+        if copy:
+            python37_fts_path = "/usr/local/lib/python3.7/dist-packages/FreeTAKServer"
+            python38_fts_path = "/usr/local/lib/python3.8/dist-packages/FreeTAKServer"
+            if os.path.exists(python37_fts_path):
+                dest = python37_fts_path
+            elif os.path.exists(python38_fts_path):
+                dest = python38_fts_path
+            else:
+                print("Cannot Find FreeTAKServer install location, cannot copy")
+                return False
+            if not os.path.exists(dest + "/Certs"):
+                os.makedirs(dest + "/Certs")
+            copyfile("./pubserver.key", dest + "/Certs" + "/pubserver.key")
+            copyfile("./pubserver.key", dest + "/Certs" + "/pubserver.key.unencrypted")
+            copyfile("./pubserver.crt", dest + "/Certs" + "/pubserver.pem")
+            copyfile("./ca.crt", dest + "/Certs" + "/ca.pem")
 
 
 if __name__ == '__main__':
-    VERSION = "0.3.1"
+    VERSION = "0.3.2"
     help_txt = "This Python script is to be used to generate the certificate files needed for \n" \
                "FTS Version 1.3 and above to allow for SSL/TLS connections between Server and \n" \
                "Client.\n\n" \
@@ -122,13 +139,15 @@ if __name__ == '__main__':
                "-v --version : to print the version number of the script\n" \
                "-p --password : to change the password for the p12 files from the default atakatak\n" \
                "-a --automated : to run the script in a headless mode to auto generate ca,server and user certs " \
-               "for a fresh install\n\n"
+               "for a fresh install\n" \
+               "-c --copy : Use this in conjunction with -a to copy the server certs needed into the default location for FTS\n\n"
     AUTO = False
+    COPY = False
     CERTPWD = "atakatak"
     cmd_args = sys.argv
     arg_list = cmd_args[1:]
-    stort_opts = "avhp:"
-    long_opts = ["automated", "version", "help", "password"]
+    stort_opts = "avhcp:"
+    long_opts = ["automated", "version", "help", "copy", "password"]
     args, values = getopt.getopt(arg_list, stort_opts, long_opts)
     for current_arg, current_val in args:
         if current_arg in ("-h", "--help"):
@@ -140,12 +159,14 @@ if __name__ == '__main__':
             CERTPWD = current_val
         if current_arg in ("-a", "--automated"):
             AUTO = True
+        if current_arg in ("-c", "--copy"):
+            COPY = True
 
     with AtakOfTheCerts() as aotc:
         aotc.generate_ca()
     if AUTO:
         with AtakOfTheCerts() as aotc:
-            aotc.generate_auto_certs()
+            aotc.generate_auto_certs(COPY)
     else:
         while True:
             with AtakOfTheCerts(CERTPWD) as aotc:
@@ -154,11 +175,3 @@ if __name__ == '__main__':
                 cont = input("Generate another? y/n")
                 if cont.lower() != "y":
                     break
-
-
-
-
-
-
-
-
