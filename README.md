@@ -27,23 +27,28 @@ Change directory to the one just downloaded
 `cd ./ATAK-Certs-0.3`
 
 **Step 4:**
+Make sure PyOpenSSL is installed
+
+`sudo python3 -m pip install pyopenssl`
+
+**Step 5:**
 Run the script
 
 Headless (recommended for a new install of FTS):
 
-`python3 ./atakofthecerts.py -a`
+`sudo python3 ./atakofthecerts.py -a`
 
 Interactive (useful if you need to add more certs to en existing setup)
 
-`python3 ./atakofthecerts.py`
+`sudo python3 ./atakofthecerts.py`
 
 If you run the script interactive, just follow the prompts
 
-**Step 5:**
+**Step 6:**
 Copy the server and client p12 files from the server to TAK devices, These can be easily dragged a dropped 
 from the SFTP session on the left side of MobaXterm 
 
-**Step 6:**
+**Step 7:**
 Update the MainConfig.py file to point at the certificates just generated in ~/ATAK-Certs-0.3.1
 
 keyDir = The pubserver.key file or whatever you named your sever
