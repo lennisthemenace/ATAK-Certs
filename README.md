@@ -1,5 +1,5 @@
 # ATAK-Certs
-Tool for creating Certificate files for FTS
+Tool for creating Certificate files and Client Data Packages for FTS
 
 `-h` `--help` : to open help
 
@@ -12,6 +12,8 @@ Tool for creating Certificate files for FTS
 `-c` `--copy` : Use this in conjunction with `-a` to copy the server certs needed into the default location for FTS, 
 if this is used skip step 7 in How to
 
+`-i` `--ip` : The IP address of the server that clients will be accessing it on
+
 
 **How To:**
 
@@ -22,12 +24,12 @@ is great because it opens an SFTP session to the server too needed for copying f
 **Step 2:**
 Download the latest zip from GitHub
 
-`wget -c https://github.com/lennisthemenace/ATAK-Certs/archive/0.3.2.tar.gz -O - | tar -xz`
+`wget -c https://github.com/lennisthemenace/ATAK-Certs/archive/0.3.3.tar.gz -O - | tar -xz`
 
 **Step 3:**
 Change directory to the one just downloaded
 
-`cd ./ATAK-Certs-0.3.2`
+`cd ./ATAK-Certs-0.3.3`
 
 **Step 4:**
 Make sure PyOpenSSL is installed
@@ -48,11 +50,11 @@ Interactive (useful if you need to add more certs to en existing setup)
 If you run the script interactive, just follow the prompts
 
 **Step 6:**
-Copy the server and client p12 files from the server to TAK devices, These can be easily dragged a dropped 
+Copy the server and client p12 files, or the Data package zip file from the server to TAK devices, These can be easily dragged a dropped 
 from the SFTP session on the left side of MobaXterm 
 
 **Step 7:**
-Update the MainConfig.py file to point at the certificates just generated in `~/ATAK-Certs-0.3.2`
+Update the MainConfig.py file to point at the certificates just generated in `~/ATAK-Certs-0.3.3`
 
 keyDir = The pubserver.key file or whatever you named your sever
 
