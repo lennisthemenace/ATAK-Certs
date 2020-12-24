@@ -39,9 +39,9 @@ Make sure PyOpenSSL is installed
 **Step 5:**
 Run the script
 
-Headless (recommended for a new install of FTS):
+Headless (recommended for a new install of FTS, change the ip address for the one clients will use to connect):
 
-`sudo python3 ./atakofthecerts.py -a`
+`sudo python3 ./atakofthecerts.py -a -c -i 192.168.1.100`
 
 Interactive (useful if you need to add more certs to en existing setup)
 
