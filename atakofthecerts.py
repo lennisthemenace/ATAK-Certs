@@ -98,7 +98,8 @@ class AtakOfTheCerts:
             cert.gmtime_adj_notBefore(0)
             cert.gmtime_adj_notAfter(31536000)
             cert.set_issuer(cert.get_subject())
-            cert.add_extensions([crypto.X509Extension(b'basicConstraints', False, b'CA:TRUE'), crypto.X509Extension(b'keyUsage', False, b'keyCertSign, cRLSign')])
+            cert.add_extensions([crypto.X509Extension(b'basicConstraints', False, b'CA:TRUE'),
+                                 crypto.X509Extension(b'keyUsage', False, b'keyCertSign, cRLSign')])
             cert.set_pubkey(ca_key)
             cert.sign(ca_key, "sha256")
 
@@ -159,17 +160,18 @@ class AtakOfTheCerts:
             f.close()
             print("PEM Stored Here: " + pempath)
 
-    def bake(self, cn):
+    def bake(self, cn, cert="user"):
         keypath = f"./{cn}.key"
         pempath = f"./{cn}.pem"
         p12path = f"./{cn}.p12"
         self._generate_key(keypath)
         self._generate_certificate(cn, pempath, p12path)
+        if cert.lower() == "server":
+            copyfile(keypath, keypath + ".unencrypted")
 
     def generate_auto_certs(self, ip, copy=False):
-        cns = ["pubserver", "user"]
-        for cn in cns:
-            self.bake(cn)
+        self.bake("pubserver", "server")
+        self.bake("user", "user")
         if copy is True:
             python37_fts_path = "/usr/local/lib/python3.7/dist-packages/FreeTAKServer"
             python38_fts_path = "/usr/local/lib/python3.8/dist-packages/FreeTAKServer"
@@ -194,8 +196,7 @@ class AtakOfTheCerts:
             print("Copying ./ca.pem to :" + dest + "/Certs" + "/ca.pem")
             copyfile("./ca.pem", dest + "/Certs" + "/ca.pem")
             print("Done")
-        generate_zip(server_address=IP)
-
+        generate_zip(server_address=ip)
 
 
 if __name__ == '__main__':
@@ -216,7 +217,8 @@ if __name__ == '__main__':
                "-p --password : to change the password for the p12 files from the default atakatak\n" \
                "-a --automated : to run the script in a headless mode to auto generate ca,server and user certs " \
                "for a fresh install\n" \
-               "-c --copy : Use this in conjunction with -a to copy the server certs needed into the default location for FTS\n\n"
+               "-c --copy : Use this in conjunction with -a to copy the server certs needed into the default location for FTS\n" \
+               "-i --ip : The IP address of the server that clients will be accessing it on\n\n"
     AUTO = False
     COPY = False
     IP = False
@@ -255,7 +257,7 @@ if __name__ == '__main__':
         if server_question.lower() == "y":
             with AtakOfTheCerts(CERTPWD) as aotc:
                 IP = str(input("Enter IP address or FQDN that clients will use to connect to FTS: "))
-                aotc.bake(IP)
+                aotc.bake(IP, cert="server")
                 server_p12 = "./" + IP + ".p12"
         user_question = input("Would you like to generate a user certificate? y/n ")
         if user_question.lower() == "y":
@@ -264,7 +266,7 @@ if __name__ == '__main__':
                     cn = input("Username: ")
                     if len(cn) == 0:
                         break
-                    aotc.bake(cn)
+                    aotc.bake(cn, cert="user")
                     users_p12.append("./" + cn + ".p12")
                     cont = input("Generate another? y/n ")
                     if cont.lower() != "y":
