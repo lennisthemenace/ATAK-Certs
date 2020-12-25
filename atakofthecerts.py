@@ -200,7 +200,7 @@ class AtakOfTheCerts:
 
 
 if __name__ == '__main__':
-    VERSION = "0.3.3"
+    VERSION = "0.3.4"
     help_txt = "This Python script is to be used to generate the certificate files needed for \n" \
                "FTS Version 1.3 and above to allow for SSL/TLS connections between Server and \n" \
                "Client.\n\n" \
