@@ -197,6 +197,36 @@ class AtakOfTheCerts:
         if cert.lower() == "server":
             copyfile(keypath, keypath + ".unencrypted")
 
+    @staticmethod
+    def copy_server_certs(server_name: str = "pubserver") -> None:
+        """
+        copy all the server files with of a given name to the FTS server cert location
+        :param server_name: Name of the server/IP address that was used when generating the certificate
+        """
+        python37_fts_path = "/usr/local/lib/python3.7/dist-packages/FreeTAKServer"
+        python38_fts_path = "/usr/local/lib/python3.8/dist-packages/FreeTAKServer"
+        if os.path.exists(python37_fts_path):
+            dest = python37_fts_path
+        elif os.path.exists(python38_fts_path):
+            dest = python38_fts_path
+        else:
+            print("Cannot Find FreeTAKServer install location, cannot copy")
+            return None
+        if not os.path.exists(dest + "/Certs"):
+            os.makedirs(dest + "/Certs")
+        print("Copying ./" + server_name + ".key to :" + dest + "/Certs" + "/pubserver.key")
+        copyfile("./" + server_name + ".key", dest + "/Certs" + "/pubserver.key")
+        print("Done")
+        print("Copying ./" + server_name + ".key to :" + dest + "/Certs" + "/pubserver.key.unencrypted")
+        copyfile("./" + server_name + ".key", dest + "/Certs" + "/pubserver.key.unencrypted")
+        print("Done")
+        print("Copying ./" + server_name + ".pem to :" + dest + "/Certs" + "/pubserver.pem")
+        copyfile("./" + server_name + ".pem", dest + "/Certs" + "/pubserver.pem")
+        print("Done")
+        print("Copying ./ca.pem to :" + dest + "/Certs" + "/ca.pem")
+        copyfile("./ca.pem", dest + "/Certs" + "/ca.pem")
+        print("Done")
+
     def generate_auto_certs(self, ip: str, copy: bool = False) -> None:
         """
         Generate the basic files needed for a new install of FTS
@@ -206,29 +236,7 @@ class AtakOfTheCerts:
         self.bake("pubserver", "server")
         self.bake("user", "user")
         if copy is True:
-            python37_fts_path = "/usr/local/lib/python3.7/dist-packages/FreeTAKServer"
-            python38_fts_path = "/usr/local/lib/python3.8/dist-packages/FreeTAKServer"
-            if os.path.exists(python37_fts_path):
-                dest = python37_fts_path
-            elif os.path.exists(python38_fts_path):
-                dest = python38_fts_path
-            else:
-                print("Cannot Find FreeTAKServer install location, cannot copy")
-                return None
-            if not os.path.exists(dest + "/Certs"):
-                os.makedirs(dest + "/Certs")
-            print("Copying ./pubserver.key to :" + dest + "/Certs" + "/pubserver.key")
-            copyfile("./pubserver.key", dest + "/Certs" + "/pubserver.key")
-            print("Done")
-            print("Copying ./pubserver.key to :" + dest + "/Certs" + "/pubserver.key.unencrypted")
-            copyfile("./pubserver.key", dest + "/Certs" + "/pubserver.key.unencrypted")
-            print("Done")
-            print("Copying ./pubserver.pem to :" + dest + "/Certs" + "/pubserver.pem")
-            copyfile("./pubserver.pem", dest + "/Certs" + "/pubserver.pem")
-            print("Done")
-            print("Copying ./ca.pem to :" + dest + "/Certs" + "/ca.pem")
-            copyfile("./ca.pem", dest + "/Certs" + "/ca.pem")
-            print("Done")
+            self.copy_server_certs()
         generate_zip(server_address=ip)
 
 
@@ -293,6 +301,9 @@ if __name__ == '__main__':
                 IP = str(input("Enter IP address or FQDN that clients will use to connect to FTS: "))
                 aotc.bake(cn=IP, cert="server")
                 server_p12 = "./" + IP + ".p12"
+            copy_question = input("Would you like to copy the server certificate files where needed for FTS? y/n ")
+            if server_question.lower() == "y":
+                aotc.copy_server_certs(server_name=IP)
         user_question = input("Would you like to generate a user certificate? y/n ")
         if user_question.lower() == "y":
             while True:
