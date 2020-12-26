@@ -12,7 +12,14 @@ import zipfile
 import shutil
 
 
-def generate_zip(server_address=None, server_filename="pubserver.p12", user_filename="user.p12"):
+def generate_zip(server_address: str = None, server_filename: str = "pubserver.p12", user_filename: str = "user.p12") -> None:
+    """
+    A Function to generate a Client connection Data Package (DP) from a server and user p12 file in the current
+    working directory.
+    :param server_address: A string based ip address or FQDN that clients will use to connect to the server
+    :param server_filename: The filename of the server p12 file default is pubserver.p12
+    :param user_filename: The filename of the server p12 file default is user.p12
+    """
     pref_file_template = Template("""<?xml version='1.0' standalone='yes'?>
     <preferences>
         <preference version="1" name="cot_streams">
@@ -74,7 +81,10 @@ def generate_zip(server_address=None, server_filename="pubserver.p12", user_file
 
 
 class AtakOfTheCerts:
-    def __init__(self, pwd="atakatak"):
+    def __init__(self, pwd: str = "atakatak") -> None:
+        """
+        :param pwd: String based password used to secure the p12 files generated, defaults to atakatak
+        """
         self.key = crypto.PKey()
         self.CERTPWD = pwd
         self.cakeypath = f"./ca.key"
@@ -86,8 +96,11 @@ class AtakOfTheCerts:
     def __exit__(self, exc_type, exc_val, exc_tb):
         return None
 
-    def generate_ca(self):
-        if not os.path.exists(aotc.cakeypath):
+    def generate_ca(self) -> None:
+        """
+        Generate a CA certificate
+        """
+        if not os.path.exists(self.cakeypath):
             print("Cannot find CA locally so generating one")
             ca_key = crypto.PKey()
             ca_key.generate_key(crypto.TYPE_RSA, 2048)
@@ -115,7 +128,11 @@ class AtakOfTheCerts:
         else:
             print("CA found locally, not generating a new one")
 
-    def _generate_key(self, keypath):
+    def _generate_key(self, keypath: str) -> None:
+        """
+        Generate a new certificate key
+        :param keypath: String based filepath to place new key, this should have a .key file extention
+        """
         if os.path.exists(keypath):
             print("Certificate file exists, aborting.")
             print(keypath)
@@ -128,7 +145,13 @@ class AtakOfTheCerts:
             f.close()
             print("Key Stored Here: " + keypath)
 
-    def _generate_certificate(self, cn, pempath, p12path):
+    def _generate_certificate(self, cn: str, pempath: str, p12path: str) -> None:
+        """
+        Create a certificate and p12 file
+        :param cn: Common Name for certificate
+        :param pempath: String filepath for the pem file created
+        :param p12path: String filepath for the p12 file created
+        """
         cakey = crypto.load_privatekey(crypto.FILETYPE_PEM, open(self.cakeypath).read())
         capem = crypto.load_certificate(crypto.FILETYPE_PEM, open(self.capempath, 'rb').read())
         serialnumber = random.getrandbits(64)
@@ -160,7 +183,12 @@ class AtakOfTheCerts:
             f.close()
             print("PEM Stored Here: " + pempath)
 
-    def bake(self, cn, cert="user"):
+    def bake(self, cn: str, cert: str = "user") -> None:
+        """
+        Wrapper for creating certificate and all files needed
+        :param cn: Common Name of the the certificate
+        :param cert: Type of cert being created "user" or "server"
+        """
         keypath = f"./{cn}.key"
         pempath = f"./{cn}.pem"
         p12path = f"./{cn}.p12"
@@ -169,7 +197,12 @@ class AtakOfTheCerts:
         if cert.lower() == "server":
             copyfile(keypath, keypath + ".unencrypted")
 
-    def generate_auto_certs(self, ip, copy=False):
+    def generate_auto_certs(self, ip: str, copy: bool = False) -> None:
+        """
+        Generate the basic files needed for a new install of FTS
+        :param ip: A string based ip address or FQDN that clients will use to connect to the server
+        :param copy: Whether to copy server files to FTS expected locations
+        """
         self.bake("pubserver", "server")
         self.bake("user", "user")
         if copy is True:
@@ -181,7 +214,7 @@ class AtakOfTheCerts:
                 dest = python38_fts_path
             else:
                 print("Cannot Find FreeTAKServer install location, cannot copy")
-                return False
+                return None
             if not os.path.exists(dest + "/Certs"):
                 os.makedirs(dest + "/Certs")
             print("Copying ./pubserver.key to :" + dest + "/Certs" + "/pubserver.key")
@@ -200,7 +233,7 @@ class AtakOfTheCerts:
 
 
 if __name__ == '__main__':
-    VERSION = "0.3.4"
+    VERSION = "0.3.5"
     help_txt = "This Python script is to be used to generate the certificate files needed for \n" \
                "FTS Version 1.3 and above to allow for SSL/TLS connections between Server and \n" \
                "Client.\n\n" \
@@ -231,6 +264,7 @@ if __name__ == '__main__':
     for current_arg, current_val in args:
         if current_arg in ("-h", "--help"):
             print(help_txt)
+            exit(1)
         if current_arg in ("-v", "--version"):
             print(VERSION)
             exit(1)
@@ -249,7 +283,7 @@ if __name__ == '__main__':
         if IP is False:
             IP = str(input("Enter IP address or FQDN that clients will use to connect to FTS: "))
         with AtakOfTheCerts() as aotc:
-            aotc.generate_auto_certs(COPY, IP)
+            aotc.generate_auto_certs(copy=COPY, ip=IP)
     else:
         server_p12 = None
         users_p12 = []
@@ -257,7 +291,7 @@ if __name__ == '__main__':
         if server_question.lower() == "y":
             with AtakOfTheCerts(CERTPWD) as aotc:
                 IP = str(input("Enter IP address or FQDN that clients will use to connect to FTS: "))
-                aotc.bake(IP, cert="server")
+                aotc.bake(cn=IP, cert="server")
                 server_p12 = "./" + IP + ".p12"
         user_question = input("Would you like to generate a user certificate? y/n ")
         if user_question.lower() == "y":
