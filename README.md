@@ -24,12 +24,12 @@ is great because it opens an SFTP session to the server too needed for copying f
 **Step 2:**
 Download the latest zip from GitHub
 
-`wget -c https://github.com/lennisthemenace/ATAK-Certs/archive/0.3.4.tar.gz -O - | tar -xz`
+`wget -c https://github.com/lennisthemenace/ATAK-Certs/archive/0.3.5.tar.gz -O - | tar -xz`
 
 **Step 3:**
 Change directory to the one just downloaded
 
-`cd ./ATAK-Certs-0.3.4`
+`cd ./ATAK-Certs-0.3.5`
 
 **Step 4:**
 Make sure PyOpenSSL is installed
@@ -54,7 +54,7 @@ Copy the server and client p12 files, or the Data package zip file from the serv
 from the SFTP session on the left side of MobaXterm 
 
 **Step 7:**
-Update the MainConfig.py file to point at the certificates just generated in `~/ATAK-Certs-0.3.4`
+Update the MainConfig.py file to point at the certificates just generated in `~/ATAK-Certs-0.3.5`
 
 keyDir = The pubserver.key file or whatever you named your sever
 
