@@ -1,4 +1,9 @@
 #!/usr/bin/python
+import subprocess
+try:
+    from OpenSSL import crypto
+except ImportError:
+    subprocess.run(["pip3", "install", "pyopenssl"], capture_output=True)
 from OpenSSL import crypto
 import os
 import getopt
