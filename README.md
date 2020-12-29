@@ -1,6 +1,8 @@
 # ATAK-Certs
 Tool for creating Certificate files and Client Data Packages for FTS
+######If you are looking for the FreeTAKServer-Installer Script see [here](https://github.com/lennisthemenace/FreeTAKServer-Installer)
 
+###Command-Line Arguments
 `-h` `--help` : to open help
 
 `-v` `--version` : to print the version number of the script
@@ -10,51 +12,41 @@ Tool for creating Certificate files and Client Data Packages for FTS
 `-a` `--automated` : to run the script in a headless mode to auto generate ca,server and user certs for a fresh install
 
 `-c` `--copy` : Use this in conjunction with `-a` to copy the server certs needed into the default location for FTS, 
-if this is used skip step 7 in How to
+if this is used skip step 5 in How to
 
 `-i` `--ip` : The IP address of the server that clients will be accessing it on
 
-
-**How To:**
-
-**Step 1:**
+##How To
+###Step 1:
 Connect you your FTS instance via SSH, For this I suggest using MobaXterm found here https://mobaxterm.mobatek.net/ This
 is great because it opens an SFTP session to the server too needed for copying files from the server.
 
-**Step 2:**
-Download the latest zip from GitHub
-
-`wget -c https://github.com/lennisthemenace/ATAK-Certs/archive/0.3.5.tar.gz -O - | tar -xz`
-
-**Step 3:**
-Change directory to the one just downloaded
-
-`cd ./ATAK-Certs-0.3.5`
-
-**Step 4:**
+###Step 2:
 Make sure PyOpenSSL is installed
 
 `sudo python3 -m pip install pyopenssl`
 
-**Step 5:**
-Run the script
+###Step 3:
+Run script in either Headless or Interactive mode:
 
-Headless (recommended for a new install of FTS, change the ip address for the one clients will use to connect):
+-**Headless** (recommended for a new install of FTS, change the ip address for the address clients will use to connect, skip step 5 if you use this option):
 
-`sudo python3 ./atakofthecerts.py -a -c -i 192.168.1.100`
+`curl -L https://git.io/JL9DP | sudo python3 - -a -c -i 192.168.1.100`
 
-Interactive (useful if you need to add more certs to en existing setup)
+-**Interactive** (useful if you need to add more certs to en existing setup)
 
-`sudo python3 ./atakofthecerts.py`
+`curl -L https://git.io/JL9DP | sudo python3 -`
 
 If you run the script interactive, just follow the prompts
 
-**Step 6:**
+###Step 4:
 Copy the server and client p12 files, or the Data package zip file from the server to TAK devices, These can be easily dragged a dropped 
 from the SFTP session on the left side of MobaXterm 
 
-**Step 7:**
-Update the MainConfig.py file to point at the certificates just generated in `~/ATAK-Certs-0.3.5`
+###Step 5:
+######Skip if you ran the script in headless mode or you answered "y" to "Would you like to copy the server certificate files where needed for FTS?"
+
+Update the MainConfig.py file to point at the certificates just generated in the directory you were in when running step 3
 
 keyDir = The pubserver.key file or whatever you named your sever
 
