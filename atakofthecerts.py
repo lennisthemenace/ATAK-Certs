@@ -289,6 +289,7 @@ class AtakOfTheCerts:
         if copy is True:
             self.copy_server_certs()
         generate_zip(server_address=ip)
+        send_data_package(server=ip, dp_name='user.zip')
 
 
 if __name__ == '__main__':
