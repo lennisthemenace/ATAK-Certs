@@ -15,15 +15,57 @@ from jinja2 import Template
 import socket
 import zipfile
 import shutil
+try:
+    import requests
+except ImportError:
+    subprocess.run(["pip3", "install", "requests"], capture_output=True)
+import hashlib
 
 
-def generate_zip(server_address: str = None, server_filename: str = "pubserver.p12", user_filename: str = "user.p12") -> None:
+def send_data_package(server: str, dp_name: str = "user.zip") -> bool:
+    """
+    Function to send data package to server
+    :param server: Server address where the package will be uploaded
+    :param dp_name: Name of the zip file to upload
+    :return: bool
+    """
+    file_hash = hashlib.sha256()
+    BLOCK_SIZE = 65536
+    with open(dp_name, 'rb') as f:
+        fb = f.read(BLOCK_SIZE)
+        while len(fb) > 0:
+            file_hash.update(fb)
+            fb = f.read(BLOCK_SIZE)
+
+    with open(dp_name, 'rb') as f:
+        s = requests.Session()
+        #g_r = s.get(f'http://{server}:8080/Marti/sync/missionquery?hash={file_hash.hexdigest()}')
+
+        #if g_r.status_code == requests.codes['not_found']:
+            #time.sleep(1)
+            #print(g_r.status_code)
+        r = s.post(f'http://{server}:8080/Marti/sync/missionupload?hash={file_hash.hexdigest()}'
+                          f'&filename={dp_name}'
+                          f'&creatorUid=atakofthecerts',
+                          files={"assetfile": f.read()},
+                          headers={'Expect': '100-continue'})
+        if r.status_code == 200:
+            p_r = s.put(f'http://{server}:8080/Marti/api/sync/metadata/{file_hash.hexdigest()}/tool')
+            return True
+        else:
+            print("Something went wrong uploading DataPackage!")
+            return False
+
+
+def generate_zip(server_address: str = None, server_filename: str = "pubserver.p12", user_filename: str = "user.p12",
+                 cert_password: str = "atakatak") -> None:
     """
     A Function to generate a Client connection Data Package (DP) from a server and user p12 file in the current
     working directory.
     :param server_address: A string based ip address or FQDN that clients will use to connect to the server
     :param server_filename: The filename of the server p12 file default is pubserver.p12
     :param user_filename: The filename of the server p12 file default is user.p12
+    :param cert_password: The password for the certificate files
     """
     pref_file_template = Template("""<?xml version='1.0' standalone='yes'?>
     <preferences>
@@ -36,6 +78,8 @@ def generate_zip(server_address: str = None, server_filename: str = "pubserver.p
         <preference version="1" name="com.atakmap.app_preferences">
             <entry key="displayServerConnectionWidget" class="class java.lang.Boolean">true</entry>
             <entry key="caLocation" class="class java.lang.String">/storage/emulated/0/atak/cert/{{ server_filename }}</entry>
+            <entry key="caPassword" class="class java.lang.String">{{ cert_password }}</entry>
+            <entry key="clientPassword" class="class java.lang.String">{{ cert_password }}</entry>
             <entry key="certificateLocation" class="class java.lang.String">/storage/emulated/0/atak/cert/{{ user_filename }}</entry>
         </preference>
     </preferences>
@@ -60,8 +104,10 @@ def generate_zip(server_address: str = None, server_filename: str = "pubserver.p
     if server_address is None:
         hostname = socket.gethostname()
         server_address = socket.gethostbyname(hostname)
-    pref = pref_file_template.render(server=server_address, server_filename=server_filename, user_filename=user_filename)
-    man = manifest_file_template.render(uid=random_id, server=server_address, server_filename=server_filename, user_filename=user_filename, folder=folder)
+    pref = pref_file_template.render(server=server_address, server_filename=server_filename,
+                                     user_filename=user_filename, cert_password=cert_password)
+    man = manifest_file_template.render(uid=random_id, server=server_address, server_filename=server_filename,
+                                        user_filename=user_filename, folder=folder)
     if not os.path.exists("./" + folder):
         os.makedirs("./" + folder)
     if not os.path.exists("./MANIFEST"):
@@ -246,7 +292,7 @@ class AtakOfTheCerts:
 
 
 if __name__ == '__main__':
-    VERSION = "0.3.5"
+    VERSION = "0.4"
     help_txt = "This Python script is to be used to generate the certificate files needed for \n" \
                "FTS Version 1.3 and above to allow for SSL/TLS connections between Server and \n" \
                "Client.\n\n" \
@@ -263,7 +309,8 @@ if __name__ == '__main__':
                "-p --password : to change the password for the p12 files from the default atakatak\n" \
                "-a --automated : to run the script in a headless mode to auto generate ca,server and user certs " \
                "for a fresh install\n" \
-               "-c --copy : Use this in conjunction with -a to copy the server certs needed into the default location for FTS\n" \
+               "-c --copy : Use this in conjunction with -a to copy the server certs needed into the " \
+               "default location for FTS\n" \
                "-i --ip : The IP address of the server that clients will be accessing it on\n\n"
     AUTO = False
     COPY = False
@@ -329,3 +376,6 @@ if __name__ == '__main__':
                     IP = str(input("Enter IP address or FQDN that clients will use to connect to FTS: "))
                 for user in users_p12:
                     generate_zip(server_address=IP, server_filename=server_p12, user_filename=user)
+            send_zip_question = input("Would you like to upload the Data Package? y/n ")
+            if send_zip_question.lower() == "y":
+                send_data_package(server=IP)
