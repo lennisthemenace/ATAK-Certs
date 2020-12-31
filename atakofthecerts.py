@@ -376,6 +376,8 @@ if __name__ == '__main__':
                     IP = str(input("Enter IP address or FQDN that clients will use to connect to FTS: "))
                 for user in users_p12:
                     generate_zip(server_address=IP, server_filename=server_p12, user_filename=user)
-            send_zip_question = input("Would you like to upload the Data Package? y/n ")
-            if send_zip_question.lower() == "y":
-                send_data_package(server=IP)
+                    send_zip_question = input("Would you like to upload the Data Packages? y/n ")
+                    username = user.replace('./', '')
+                    username = username.replace('.p12', '')
+                    if send_zip_question.lower() == "y":
+                        send_data_package(server=IP, dp_name=username + '.zip')
