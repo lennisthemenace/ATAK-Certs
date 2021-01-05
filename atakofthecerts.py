@@ -117,8 +117,8 @@ def generate_zip(server_address: str = None, server_filename: str = "pubserver.p
     if server_address is None:
         hostname = socket.gethostname()
         server_address = socket.gethostbyname(hostname)
-    pref = pref_file_template.render(server=server_address, server_filename=server_filename,
-                                     user_filename=user_filename, cert_password=cert_password)
+    pref = pref_file_template.render(server=server_address, server_filename=server_filename.replace("./", ""),
+                                     user_filename=user_filename.replace("./", ""), cert_password=cert_password)
     man = manifest_file_template.render(uid=random_id, server=server_address,
                                         server_filename=server_filename.replace("./", ""),
                                         user_filename=user_filename.replace("./", ""), folder=folder)
