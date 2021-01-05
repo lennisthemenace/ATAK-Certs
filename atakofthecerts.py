@@ -98,16 +98,32 @@ def generate_zip(server_address: str = None, server_filename: str = "pubserver.p
        </Contents>
     </MissionPackageManifest>
     """)
+
+    manifest_file_parent_template = Template("""<MissionPackageManifest version="2">
+           <Configuration>
+              <Parameter name="uid" value="{{ uid }}"/>
+              <Parameter name="name" value="FreeTAKServer_{{ server }}_DP"/>
+           </Configuration>
+           <Contents>
+              <Content ignore="false" zipEntry="{{ folder }}/{{ internal_dp_name }}.zip"/>
+           </Contents>
+        </MissionPackageManifest>
+        """)
     username = user_filename[:-4]
     random_id = uuid.uuid4()
+    new_uid = uuid.uuid4()
+    parentfolder = "80b828699e074a239066d454a76284eb"
     folder = "5c2bfcae3d98c9f4d262172df99ebac5"
     if server_address is None:
         hostname = socket.gethostname()
         server_address = socket.gethostbyname(hostname)
     pref = pref_file_template.render(server=server_address, server_filename=server_filename,
                                      user_filename=user_filename, cert_password=cert_password)
-    man = manifest_file_template.render(uid=random_id, server=server_address, server_filename=server_filename,
-                                        user_filename=user_filename, folder=folder)
+    man = manifest_file_template.render(uid=random_id, server=server_address,
+                                        server_filename=server_filename.replace("./", ""),
+                                        user_filename=user_filename.replace("./", ""), folder=folder)
+    man_parent = manifest_file_parent_template.render(uid=new_uid, server=server_address,
+                                                      folder=parentfolder, internal_dp_name=f"{username.replace('./', '')}")
     if not os.path.exists("./" + folder):
         os.makedirs("./" + folder)
     if not os.path.exists("./MANIFEST"):
@@ -116,10 +132,10 @@ def generate_zip(server_address: str = None, server_filename: str = "pubserver.p
         pref_file.write(pref)
     with open('./MANIFEST/manifest.xml', 'w') as manifest_file:
         manifest_file.write(man)
-    print("Generating Data Package: " + username + ".zip")
+    print("Generating inner Data Package: " + username + ".zip")
     copyfile("./" + server_filename, "./" + folder + "/" + server_filename)
     copyfile("./" + user_filename, "./" + folder + "/" + user_filename)
-    zipf = zipfile.ZipFile(username + '.zip', 'w', zipfile.ZIP_DEFLATED)
+    zipf = zipfile.ZipFile(f"{username}.zip", 'w', zipfile.ZIP_DEFLATED)
     for root, dirs, files in os.walk('./' + folder):
         for file in files:
             zipf.write(os.path.join(root, file))
@@ -129,6 +145,26 @@ def generate_zip(server_address: str = None, server_filename: str = "pubserver.p
     zipf.close()
     shutil.rmtree("./MANIFEST")
     shutil.rmtree("./" + folder)
+    # Create outer DP...because WinTAK
+    if not os.path.exists("./" + parentfolder):
+        os.makedirs("./" + parentfolder)
+    if not os.path.exists("./MANIFEST"):
+        os.makedirs("./MANIFEST")
+    with open('./MANIFEST/manifest.xml', 'w') as manifest_parent:
+        manifest_parent.write(man_parent)
+    print(f"Generating Main Data Package: {username}_DP.zip")
+    copyfile(f"./{username}.zip", f"./{parentfolder}/{username}.zip")
+    zipp = zipfile.ZipFile(f"{username}_DP.zip", 'w', zipfile.ZIP_DEFLATED)
+    for root, dirs, files in os.walk('./' + parentfolder):
+        for file in files:
+            zipp.write(os.path.join(root, file))
+    for root, dirs, files in os.walk('./MANIFEST'):
+        for file in files:
+            zipp.write(os.path.join(root, file))
+    zipp.close()
+    shutil.rmtree("./MANIFEST")
+    shutil.rmtree("./" + parentfolder)
+    os.remove(f"./{username}.zip")
 
 
 class AtakOfTheCerts:
@@ -293,7 +329,7 @@ class AtakOfTheCerts:
 
 
 if __name__ == '__main__':
-    VERSION = "0.4"
+    VERSION = "0.4.1"
     help_txt = "This Python script is to be used to generate the certificate files needed for \n" \
                "FTS Version 1.3 and above to allow for SSL/TLS connections between Server and \n" \
                "Client.\n\n" \
@@ -355,7 +391,7 @@ if __name__ == '__main__':
                 aotc.bake(cn=IP, cert="server")
                 server_p12 = "./" + IP + ".p12"
             copy_question = input("Would you like to copy the server certificate files where needed for FTS? y/n ")
-            if server_question.lower() == "y":
+            if copy_question.lower() == "y":
                 aotc.copy_server_certs(server_name=IP)
         user_question = input("Would you like to generate a user certificate? y/n ")
         if user_question.lower() == "y":
@@ -381,4 +417,4 @@ if __name__ == '__main__':
                     username = user.replace('./', '')
                     username = username.replace('.p12', '')
                     if send_zip_question.lower() == "y":
-                        send_data_package(server=IP, dp_name=username + '.zip')
+                        send_data_package(server=IP, dp_name=username + '_DP.zip')
