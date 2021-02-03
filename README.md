@@ -1,4 +1,6 @@
 # ATAK-Certs
+## This Tool has now been integrated into FTS 1.5. so you shouldn't need this any longer
+
 Tool for creating Certificate files and Client Data Packages for FTS
 ###### If you are looking for the FreeTAKServer-Installer Script see [here](https://github.com/lennisthemenace/FreeTAKServer-Installer)
 
