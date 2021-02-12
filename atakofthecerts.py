@@ -1,17 +1,22 @@
 #!/usr/bin/python
 import subprocess
+
 try:
     from OpenSSL import crypto
 except ImportError:
     subprocess.run(["pip3", "install", "pyopenssl"], capture_output=True)
-from OpenSSL import crypto
+    from OpenSSL import crypto
 import os
 import getopt
 import sys
 import random
 from shutil import copyfile
 import uuid
-from jinja2 import Template
+try:
+    from jinja2 import Template
+except ImportError:
+    subprocess.run(["pip3", "install", "jinja2"], capture_output=True)
+    from jinja2 import Template
 import socket
 import zipfile
 import shutil
@@ -30,25 +35,20 @@ def send_data_package(server: str, dp_name: str = "user.zip") -> bool:
     :return: bool
     """
     file_hash = hashlib.sha256()
-    BLOCK_SIZE = 65536
+    block_size = 65536
     with open(dp_name, 'rb') as f:
-        fb = f.read(BLOCK_SIZE)
+        fb = f.read(block_size)
         while len(fb) > 0:
             file_hash.update(fb)
-            fb = f.read(BLOCK_SIZE)
+            fb = f.read(block_size)
 
     with open(dp_name, 'rb') as f:
         s = requests.Session()
-        #g_r = s.get(f'http://{server}:8080/Marti/sync/missionquery?hash={file_hash.hexdigest()}')
-
-        #if g_r.status_code == requests.codes['not_found']:
-            #time.sleep(1)
-            #print(g_r.status_code)
         r = s.post(f'http://{server}:8080/Marti/sync/missionupload?hash={file_hash.hexdigest()}'
-                          f'&filename={dp_name}'
-                          f'&creatorUid=atakofthecerts',
-                          files={"assetfile": f.read()},
-                          headers={'Expect': '100-continue'})
+                   f'&filename={dp_name}'
+                   f'&creatorUid=atakofthecerts',
+                   files={"assetfile": f.read()},
+                   headers={'Expect': '100-continue'})
         if r.status_code == 200:
             p_r = s.put(f'http://{server}:8080/Marti/api/sync/metadata/{file_hash.hexdigest()}/tool')
             return True
@@ -58,7 +58,7 @@ def send_data_package(server: str, dp_name: str = "user.zip") -> bool:
 
 
 def generate_zip(server_address: str = None, server_filename: str = "pubserver.p12", user_filename: str = "user.p12",
-                 cert_password: str = "atakatak") -> None:
+                 cert_password: str = "atakatak", ssl_port: str = "8089") -> None:
     """
     A Function to generate a Client connection Data Package (DP) from a server and user p12 file in the current
     working directory.
@@ -66,6 +66,7 @@ def generate_zip(server_address: str = None, server_filename: str = "pubserver.p
     :param server_filename: The filename of the server p12 file default is pubserver.p12
     :param user_filename: The filename of the server p12 file default is user.p12
     :param cert_password: The password for the certificate files
+    :param ssl_port: The port used for SSL CoT, defaults to 8089
     """
     pref_file_template = Template("""<?xml version='1.0' standalone='yes'?>
     <preferences>
@@ -73,7 +74,7 @@ def generate_zip(server_address: str = None, server_filename: str = "pubserver.p
             <entry key="count" class="class java.lang.Integer">1</entry>
             <entry key="description0" class="class java.lang.String">FreeTAKServer_{{ server }}</entry>
             <entry key="enabled0" class="class java.lang.Boolean">true</entry>
-            <entry key="connectString0" class="class java.lang.String">{{ server }}:8089:ssl</entry>
+            <entry key="connectString0" class="class java.lang.String">{{ server }}:{{ ssl_port }}:ssl</entry>
         </preference>
         <preference version="1" name="com.atakmap.app_preferences">
             <entry key="displayServerConnectionWidget" class="class java.lang.Boolean">true</entry>
@@ -112,18 +113,20 @@ def generate_zip(server_address: str = None, server_filename: str = "pubserver.p
     username = user_filename[:-4]
     random_id = uuid.uuid4()
     new_uid = uuid.uuid4()
-    parentfolder = "80b828699e074a239066d454a76284eb"
+    parent_folder = "80b828699e074a239066d454a76284eb"
     folder = "5c2bfcae3d98c9f4d262172df99ebac5"
     if server_address is None:
         hostname = socket.gethostname()
         server_address = socket.gethostbyname(hostname)
     pref = pref_file_template.render(server=server_address, server_filename=server_filename.replace("./", ""),
-                                     user_filename=user_filename.replace("./", ""), cert_password=cert_password)
+                                     user_filename=user_filename.replace("./", ""), cert_password=cert_password,
+                                     ssl_port=ssl_port)
     man = manifest_file_template.render(uid=random_id, server=server_address,
                                         server_filename=server_filename.replace("./", ""),
                                         user_filename=user_filename.replace("./", ""), folder=folder)
     man_parent = manifest_file_parent_template.render(uid=new_uid, server=server_address,
-                                                      folder=parentfolder, internal_dp_name=f"{username.replace('./', '')}")
+                                                      folder=parent_folder,
+                                                      internal_dp_name=f"{username.replace('./', '')}")
     if not os.path.exists("./" + folder):
         os.makedirs("./" + folder)
     if not os.path.exists("./MANIFEST"):
@@ -146,16 +149,16 @@ def generate_zip(server_address: str = None, server_filename: str = "pubserver.p
     shutil.rmtree("./MANIFEST")
     shutil.rmtree("./" + folder)
     # Create outer DP...because WinTAK
-    if not os.path.exists("./" + parentfolder):
-        os.makedirs("./" + parentfolder)
+    if not os.path.exists("./" + parent_folder):
+        os.makedirs("./" + parent_folder)
     if not os.path.exists("./MANIFEST"):
         os.makedirs("./MANIFEST")
     with open('./MANIFEST/manifest.xml', 'w') as manifest_parent:
         manifest_parent.write(man_parent)
     print(f"Generating Main Data Package: {username}_DP.zip")
-    copyfile(f"./{username}.zip", f"./{parentfolder}/{username}.zip")
+    copyfile(f"./{username}.zip", f"./{parent_folder}/{username}.zip")
     zipp = zipfile.ZipFile(f"{username}_DP.zip", 'w', zipfile.ZIP_DEFLATED)
-    for root, dirs, files in os.walk('./' + parentfolder):
+    for root, dirs, files in os.walk('./' + parent_folder):
         for file in files:
             zipp.write(os.path.join(root, file))
     for root, dirs, files in os.walk('./MANIFEST'):
@@ -163,7 +166,7 @@ def generate_zip(server_address: str = None, server_filename: str = "pubserver.p
             zipp.write(os.path.join(root, file))
     zipp.close()
     shutil.rmtree("./MANIFEST")
-    shutil.rmtree("./" + parentfolder)
+    shutil.rmtree("./" + parent_folder)
     os.remove(f"./{username}.zip")
 
 
@@ -173,9 +176,9 @@ class AtakOfTheCerts:
         :param pwd: String based password used to secure the p12 files generated, defaults to atakatak
         """
         self.key = crypto.PKey()
-        self.CERTPWD = pwd
-        self.cakeypath = f"./ca.key"
-        self.capempath = f"./ca.pem"
+        self.cert_pwd = pwd
+        self.ca_key_path = f"./ca.key"
+        self.ca_pem_path = f"./ca.pem"
 
     def __enter__(self):
         return self
@@ -183,11 +186,11 @@ class AtakOfTheCerts:
     def __exit__(self, exc_type, exc_val, exc_tb):
         return None
 
-    def generate_ca(self) -> None:
+    def generate_ca(self, expiry_time_secs: int = 31536000) -> None:
         """
         Generate a CA certificate
         """
-        if not os.path.exists(self.cakeypath):
+        if not os.path.exists(self.ca_key_path):
             print("Cannot find CA locally so generating one")
             ca_key = crypto.PKey()
             ca_key.generate_key(crypto.TYPE_RSA, 2048)
@@ -196,91 +199,94 @@ class AtakOfTheCerts:
             cert.set_serial_number(0)
             cert.set_version(2)
             cert.gmtime_adj_notBefore(0)
-            cert.gmtime_adj_notAfter(31536000)
+            cert.gmtime_adj_notAfter(expiry_time_secs)
             cert.set_issuer(cert.get_subject())
             cert.add_extensions([crypto.X509Extension(b'basicConstraints', False, b'CA:TRUE'),
                                  crypto.X509Extension(b'keyUsage', False, b'keyCertSign, cRLSign')])
             cert.set_pubkey(ca_key)
             cert.sign(ca_key, "sha256")
 
-            f = open(self.cakeypath, "wb")
+            f = open(self.ca_key_path, "wb")
             f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, ca_key))
             f.close()
-            print("CA key Stored Here: " + self.cakeypath)
+            print("CA key Stored Here: " + self.ca_key_path)
 
-            f = open(self.capempath, "wb")
+            f = open(self.ca_pem_path, "wb")
             f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
             f.close()
-            print("CA pem Stored Here: " + self.capempath)
+            print("CA pem Stored Here: " + self.ca_pem_path)
         else:
             print("CA found locally, not generating a new one")
 
-    def _generate_key(self, keypath: str) -> None:
+    def _generate_key(self, key_path: str) -> None:
         """
         Generate a new certificate key
-        :param keypath: String based filepath to place new key, this should have a .key file extention
+        :param key_path: String based filepath to place new key, this should have a .key file extension
         """
-        if os.path.exists(keypath):
+        if os.path.exists(key_path):
             print("Certificate file exists, aborting.")
-            print(keypath)
+            print(key_path)
             sys.exit(1)
         else:
             print("Generating Key...")
             self.key.generate_key(crypto.TYPE_RSA, 2048)
-            f = open(keypath, "wb")
+            f = open(key_path, "wb")
             f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, self.key))
             f.close()
-            print("Key Stored Here: " + keypath)
+            print("Key Stored Here: " + key_path)
 
-    def _generate_certificate(self, cn: str, pempath: str, p12path: str) -> None:
+    def _generate_certificate(self, common_name: str, pem_path: str, p12path: str,
+                              expiry_time_secs: int = 31536000) -> None:
         """
         Create a certificate and p12 file
-        :param cn: Common Name for certificate
-        :param pempath: String filepath for the pem file created
+        :param common_name: Common Name for certificate
+        :param pem_path: String filepath for the pem file created
         :param p12path: String filepath for the p12 file created
+        :param expiry_time_secs: length of time in seconds that the certificate is valid for, defaults to 1 year
         """
-        cakey = crypto.load_privatekey(crypto.FILETYPE_PEM, open(self.cakeypath).read())
-        capem = crypto.load_certificate(crypto.FILETYPE_PEM, open(self.capempath, 'rb').read())
-        serialnumber = random.getrandbits(64)
-        chain = (capem,)
+        ca_key = crypto.load_privatekey(crypto.FILETYPE_PEM, open(self.ca_key_path).read())
+        ca_pem = crypto.load_certificate(crypto.FILETYPE_PEM, open(self.ca_pem_path, 'rb').read())
+        serial_number = random.getrandbits(64)
+        chain = (ca_pem,)
         cert = crypto.X509()
-        cert.get_subject().CN = cn
-        cert.set_serial_number(serialnumber)
+        cert.get_subject().CN = common_name
+        cert.set_serial_number(serial_number)
         cert.gmtime_adj_notBefore(0)
-        cert.gmtime_adj_notAfter(315360000)
-        cert.set_issuer(capem.get_subject())
+        cert.gmtime_adj_notAfter(expiry_time_secs)
+        cert.set_issuer(ca_pem.get_subject())
         cert.set_pubkey(self.key)
         cert.set_version(2)
-        cert.sign(cakey, "sha256")
+        cert.sign(ca_key, "sha256")
         p12 = crypto.PKCS12()
         p12.set_privatekey(self.key)
         p12.set_certificate(cert)
         p12.set_ca_certificates(tuple(chain))
-        p12data = p12.export(passphrase=bytes(self.CERTPWD, encoding='UTF-8'))
+        p12data = p12.export(passphrase=bytes(self.cert_pwd, encoding='UTF-8'))
         with open(p12path, 'wb') as p12file:
             p12file.write(p12data)
             print("P12 Stored Here: " + p12path)
 
-        if os.path.exists(pempath):
+        if os.path.exists(pem_path):
             print("Certificate File Exists, aborting.")
-            print(pempath)
+            print(pem_path)
         else:
-            f = open(pempath, "wb")
+            f = open(pem_path, "wb")
             f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
             f.close()
-            print("PEM Stored Here: " + pempath)
+            print("PEM Stored Here: " + pem_path)
 
-    def bake(self, cn: str, cert: str = "user") -> None:
+    def bake(self, common_name: str, cert: str = "user", expiry_time_secs: int = 31536000) -> None:
         """
         Wrapper for creating certificate and all files needed
-        :param cn: Common Name of the the certificate
+        :param common_name: Common Name of the the certificate
         :param cert: Type of cert being created "user" or "server"
+        :param expiry_time_secs: length of time in seconds that the certificate is valid for, defaults to 1 year
         """
-        keypath = f"./{cn}.key"
-        pempath = f"./{cn}.pem"
-        p12path = f"./{cn}.p12"
+        keypath = f"./{common_name}.key"
+        pempath = f"./{common_name}.pem"
+        p12path = f"./{common_name}.p12"
         self._generate_key(keypath)
-        self._generate_certificate(cn, pempath, p12path)
+        self._generate_certificate(common_name, pempath, p12path, expiry_time_secs)
         if cert.lower() == "server":
             copyfile(keypath, keypath + ".unencrypted")
 
@@ -314,14 +320,15 @@ class AtakOfTheCerts:
         copyfile("./ca.pem", dest + "/Certs" + "/ca.pem")
         print("Done")
 
-    def generate_auto_certs(self, ip: str, copy: bool = False) -> None:
+    def generate_auto_certs(self, ip: str, copy: bool = False, expiry_time_secs: int = 31536000) -> None:
         """
         Generate the basic files needed for a new install of FTS
         :param ip: A string based ip address or FQDN that clients will use to connect to the server
         :param copy: Whether to copy server files to FTS expected locations
+        :param expiry_time_secs: length of time in seconds that the certificate is valid for, defaults to 1 year
         """
-        self.bake("pubserver", "server")
-        self.bake("user", "user")
+        self.bake("pubserver", "server", expiry_time_secs)
+        self.bake("user", "user", expiry_time_secs)
         if copy is True:
             self.copy_server_certs()
         generate_zip(server_address=ip)
@@ -329,7 +336,7 @@ class AtakOfTheCerts:
 
 
 if __name__ == '__main__':
-    VERSION = "0.4.1"
+    VERSION = "0.5"
     help_txt = "This Python script is to be used to generate the certificate files needed for \n" \
                "FTS Version 1.3 and above to allow for SSL/TLS connections between Server and \n" \
                "Client.\n\n" \
@@ -388,7 +395,7 @@ if __name__ == '__main__':
         if server_question.lower() == "y":
             with AtakOfTheCerts(CERTPWD) as aotc:
                 IP = str(input("Enter IP address or FQDN that clients will use to connect to FTS: "))
-                aotc.bake(cn=IP, cert="server")
+                aotc.bake(common_name=IP, cert="server")
                 server_p12 = "./" + IP + ".p12"
             copy_question = input("Would you like to copy the server certificate files where needed for FTS? y/n ")
             if copy_question.lower() == "y":
