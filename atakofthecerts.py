@@ -301,8 +301,8 @@ class AtakOfTheCerts:
         except ImportError:
             print("Cannot import FTS, it must not be installed on this machine. cannot continue")
             exit(0)
-        if not os.path.exists(Mainconfig.MainConfig.certsPath):
-            os.makedirs(Mainconfig.MainConfig.certsPath)
+        # if not os.path.exists(Mainconfig.MainConfig.certsPath):
+        #     os.makedirs(Mainconfig.MainConfig.certsPath)
         print(f"Copying ./{server_name}.key to : {Mainconfig.MainConfig.keyDir}")
         copyfile(f"./{server_name}.key", Mainconfig.MainConfig.keyDir)
         print("Done")
