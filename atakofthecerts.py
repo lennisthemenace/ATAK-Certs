@@ -1,14 +1,13 @@
 #!/usr/bin/python
 import subprocess
-
 try:
     from OpenSSL import crypto
 except ImportError:
     subprocess.run(["pip3", "install", "pyopenssl"], capture_output=True)
     from OpenSSL import crypto
-import os
 import getopt
 import sys
+import os
 import random
 from shutil import copyfile
 import uuid
@@ -25,6 +24,53 @@ try:
 except ImportError:
     subprocess.run(["pip3", "install", "requests"], capture_output=True)
 import hashlib
+
+
+def revoke_certificate(ca_pem, ca_key, revoked_file, crl_file, user_cert_dir, username):
+    """
+    Function to create/update a CRL with revoked user certificates
+    :param ca_pem: The path to your CA PEM file
+    :param ca_key: The Path to your CA key file
+    :param revoked_file: Path to JSON file to be used as a DB for revocation
+    :param crl_file: Path to CRL file
+    :param user_cert_dir: Path to director containing all issued user PEM files
+    :param username: the username to Revoke
+    :return: bool
+    """
+    from crlbuilder import CertificateListBuilder
+    from datetime import datetime
+    import pytz
+    import os
+    from oscrypto import asymmetric
+    from cryptography import x509
+    from cryptography.hazmat.backends import default_backend
+    import json
+    private_key = asymmetric.load_private_key(ca_key, None)
+    certificate = asymmetric.load_certificate(ca_pem)
+    builder = CertificateListBuilder("", certificate, 1)
+    data = {}
+    if os.path.exists(revoked_file):
+        with open(revoked_file, 'r') as json_file:
+            data = json.load(json_file)
+    for cert in os.listdir(user_cert_dir):
+        if cert.lower() == f"{username.lower()}.pem":
+            with open(cert, 'rb') as cert:
+                certb = cert.read()
+            cert = x509.load_pem_x509_certificate(certb, default_backend())
+            data[str(cert.serial_number)] = username
+
+    for key in data:
+        revoked_time = datetime.utcnow().replace(tzinfo=pytz.utc)
+        builder.add_certificate(int(key), revoked_time, 'key_compromise')
+
+    certificate_list = builder.build(private_key)
+
+    with open(revoked_file, 'w+') as json_file:
+        json.dump(data, json_file)
+
+    with open(crl_file, 'wb') as f:
+        f.write(certificate_list.dump())
+    return True
 
 
 def send_data_package(server: str, dp_name: str = "user.zip") -> bool:
@@ -202,7 +248,10 @@ class AtakOfTheCerts:
             cert.gmtime_adj_notAfter(expiry_time_secs)
             cert.set_issuer(cert.get_subject())
             cert.add_extensions([crypto.X509Extension(b'basicConstraints', False, b'CA:TRUE'),
-                                 crypto.X509Extension(b'keyUsage', False, b'keyCertSign, cRLSign')])
+                                 crypto.X509Extension(b'keyUsage', False, b'keyCertSign, cRLSign'),
+                                 crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash", subject=cert),
+                                 ])
+
             cert.set_pubkey(ca_key)
             cert.sign(ca_key, "sha256")
 
