@@ -15,6 +15,12 @@ with atakofthecerts.AtakOfTheCerts() as aotc:
 atakofthecerts.generate_zip(server_address="192.168.1.100", server_filename="pubserver.p12", user_filename="user.p12",
                             ssl_port="8089")
 
+
+# Revoke Certificates and generate/update a CRL
+
+atakofthecerts.revoke_certificate(ca_key='./ca.key', ca_pem='./ca.pem', revoked_file='./revoked.json',
+                                  crl_file='./root.crl', user_cert_dir="./", username="user")
+
 if __name__ == '__main__':
     print("Do not run this file, it just contains and example")
     exit(1)

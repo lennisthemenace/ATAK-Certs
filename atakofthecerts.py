@@ -1,14 +1,13 @@
 #!/usr/bin/python
 import subprocess
-
 try:
     from OpenSSL import crypto
 except ImportError:
     subprocess.run(["pip3", "install", "pyopenssl"], capture_output=True)
     from OpenSSL import crypto
-import os
 import getopt
 import sys
+import os
 import random
 from shutil import copyfile
 import uuid
@@ -25,6 +24,53 @@ try:
 except ImportError:
     subprocess.run(["pip3", "install", "requests"], capture_output=True)
 import hashlib
+
+
+def revoke_certificate(ca_pem, ca_key, revoked_file, crl_file, user_cert_dir, username):
+    """
+    Function to create/update a CRL with revoked user certificates
+    :param ca_pem: The path to your CA PEM file
+    :param ca_key: The Path to your CA key file
+    :param revoked_file: Path to JSON file to be used as a DB for revocation
+    :param crl_file: Path to CRL file
+    :param user_cert_dir: Path to director containing all issued user PEM files
+    :param username: the username to Revoke
+    :return: bool
+    """
+    from crlbuilder import CertificateListBuilder
+    from datetime import datetime
+    import pytz
+    import os
+    from oscrypto import asymmetric
+    from cryptography import x509
+    from cryptography.hazmat.backends import default_backend
+    import json
+    private_key = asymmetric.load_private_key(ca_key, None)
+    certificate = asymmetric.load_certificate(ca_pem)
+    builder = CertificateListBuilder("", certificate, 1)
+    data = {}
+    if os.path.exists(revoked_file):
+        with open(revoked_file, 'r') as json_file:
+            data = json.load(json_file)
+    for cert in os.listdir(user_cert_dir):
+        if cert.lower() == f"{username.lower()}.pem":
+            with open(cert, 'rb') as cert:
+                certb = cert.read()
+            cert = x509.load_pem_x509_certificate(certb, default_backend())
+            data[str(cert.serial_number)] = username
+
+    for key in data:
+        revoked_time = datetime.utcnow().replace(tzinfo=pytz.utc)
+        builder.add_certificate(int(key), revoked_time, 'key_compromise')
+
+    certificate_list = builder.build(private_key)
+
+    with open(revoked_file, 'w+') as json_file:
+        json.dump(data, json_file)
+
+    with open(crl_file, 'wb') as f:
+        f.write(certificate_list.dump())
+    return True
 
 
 def send_data_package(server: str, dp_name: str = "user.zip") -> bool:
@@ -127,17 +173,17 @@ def generate_zip(server_address: str = None, server_filename: str = "pubserver.p
     man_parent = manifest_file_parent_template.render(uid=new_uid, server=server_address,
                                                       folder=parent_folder,
                                                       internal_dp_name=f"{username.replace('./', '')}")
-    if not os.path.exists("./" + folder):
-        os.makedirs("./" + folder)
+    if not os.path.exists(f"./{folder}"):
+        os.makedirs(f"./{folder}")
     if not os.path.exists("./MANIFEST"):
         os.makedirs("./MANIFEST")
-    with open('./' + folder + '/fts.pref', 'w') as pref_file:
+    with open(f'./{folder}/fts.pref', 'w') as pref_file:
         pref_file.write(pref)
     with open('./MANIFEST/manifest.xml', 'w') as manifest_file:
         manifest_file.write(man)
-    print("Generating inner Data Package: " + username + ".zip")
-    copyfile("./" + server_filename, "./" + folder + "/" + server_filename)
-    copyfile("./" + user_filename, "./" + folder + "/" + user_filename)
+    print(f"Generating inner Data Package: {username}.zip")
+    copyfile(f"./{server_filename}", f"./{folder}/{server_filename}")
+    copyfile(f"./{user_filename}", f"./{folder}/{user_filename}")
     zipf = zipfile.ZipFile(f"{username}.zip", 'w', zipfile.ZIP_DEFLATED)
     for root, dirs, files in os.walk('./' + folder):
         for file in files:
@@ -177,8 +223,8 @@ class AtakOfTheCerts:
         """
         self.key = crypto.PKey()
         self.cert_pwd = pwd
-        self.ca_key_path = f"./ca.key"
-        self.ca_pem_path = f"./ca.pem"
+        self.ca_key_path = "./ca.key"
+        self.ca_pem_path = "./ca.pem"
 
     def __enter__(self):
         return self
@@ -202,19 +248,22 @@ class AtakOfTheCerts:
             cert.gmtime_adj_notAfter(expiry_time_secs)
             cert.set_issuer(cert.get_subject())
             cert.add_extensions([crypto.X509Extension(b'basicConstraints', False, b'CA:TRUE'),
-                                 crypto.X509Extension(b'keyUsage', False, b'keyCertSign, cRLSign')])
+                                 crypto.X509Extension(b'keyUsage', False, b'keyCertSign, cRLSign'),
+                                 crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash", subject=cert),
+                                 ])
+
             cert.set_pubkey(ca_key)
             cert.sign(ca_key, "sha256")
 
             f = open(self.ca_key_path, "wb")
             f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, ca_key))
             f.close()
-            print("CA key Stored Here: " + self.ca_key_path)
+            print(f"CA key Stored Here: {self.ca_key_path}")
 
             f = open(self.ca_pem_path, "wb")
             f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
             f.close()
-            print("CA pem Stored Here: " + self.ca_pem_path)
+            print(f"CA pem Stored Here: {self.ca_pem_path}")
         else:
             print("CA found locally, not generating a new one")
 
@@ -233,7 +282,7 @@ class AtakOfTheCerts:
             f = open(key_path, "wb")
             f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, self.key))
             f.close()
-            print("Key Stored Here: " + key_path)
+            print(f"Key Stored Here: {key_path}")
 
     def _generate_certificate(self, common_name: str, pem_path: str, p12path: str,
                               expiry_time_secs: int = 31536000) -> None:
@@ -273,7 +322,7 @@ class AtakOfTheCerts:
             f = open(pem_path, "wb")
             f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
             f.close()
-            print("PEM Stored Here: " + pem_path)
+            print(f"PEM Stored Here: {pem_path}")
 
     def bake(self, common_name: str, cert: str = "user", expiry_time_secs: int = 31536000) -> None:
         """
@@ -296,28 +345,27 @@ class AtakOfTheCerts:
         copy all the server files with of a given name to the FTS server cert location
         :param server_name: Name of the server/IP address that was used when generating the certificate
         """
-        python37_fts_path = "/usr/local/lib/python3.7/dist-packages/FreeTAKServer"
-        python38_fts_path = "/usr/local/lib/python3.8/dist-packages/FreeTAKServer"
-        if os.path.exists(python37_fts_path):
-            dest = python37_fts_path
-        elif os.path.exists(python38_fts_path):
-            dest = python38_fts_path
-        else:
-            print("Cannot Find FreeTAKServer install location, cannot copy")
-            return None
-        if not os.path.exists(dest + "/Certs"):
-            os.makedirs(dest + "/Certs")
-        print("Copying ./" + server_name + ".key to :" + dest + "/Certs" + "/pubserver.key")
-        copyfile("./" + server_name + ".key", dest + "/Certs" + "/pubserver.key")
+        try:
+            import FreeTAKServer.controllers.configuration.MainConfig as Mainconfig
+        except ImportError:
+            print("Cannot import FTS, it must not be installed on this machine. cannot continue")
+            exit(0)
+        # if not os.path.exists(Mainconfig.MainConfig.certsPath):
+        #     os.makedirs(Mainconfig.MainConfig.certsPath)
+        print(f"Copying ./{server_name}.key to : {Mainconfig.MainConfig.keyDir}")
+        copyfile(f"./{server_name}.key", Mainconfig.MainConfig.keyDir)
         print("Done")
-        print("Copying ./" + server_name + ".key to :" + dest + "/Certs" + "/pubserver.key.unencrypted")
-        copyfile("./" + server_name + ".key", dest + "/Certs" + "/pubserver.key.unencrypted")
+        print(f"Copying ./{server_name}.key to : {Mainconfig.MainConfig.unencryptedKey}")
+        copyfile(f"./{server_name}.key", Mainconfig.MainConfig.unencryptedKey)
         print("Done")
-        print("Copying ./" + server_name + ".pem to :" + dest + "/Certs" + "/pubserver.pem")
-        copyfile("./" + server_name + ".pem", dest + "/Certs" + "/pubserver.pem")
+        print(f"Copying ./{server_name}.pem to : {Mainconfig.MainConfig.pemDir}")
+        copyfile(f"./{server_name}.pem", Mainconfig.MainConfig.pemDir)
         print("Done")
-        print("Copying ./ca.pem to :" + dest + "/Certs" + "/ca.pem")
-        copyfile("./ca.pem", dest + "/Certs" + "/ca.pem")
+        print(f"Copying ./ca.pem to : {Mainconfig.MainConfig.CA}")
+        copyfile("./ca.pem", Mainconfig.MainConfig.CA)
+        print("Done")
+        print(f"Copying ./ca.key to : {Mainconfig.MainConfig.CAkey}")
+        copyfile("./ca.key", Mainconfig.MainConfig.CAkey)
         print("Done")
 
     def generate_auto_certs(self, ip: str, copy: bool = False, expiry_time_secs: int = 31536000) -> None:
@@ -336,7 +384,7 @@ class AtakOfTheCerts:
 
 
 if __name__ == '__main__':
-    VERSION = "0.5"
+    VERSION = "0.6"
     help_txt = "This Python script is to be used to generate the certificate files needed for \n" \
                "FTS Version 1.3 and above to allow for SSL/TLS connections between Server and \n" \
                "Client.\n\n" \
@@ -396,7 +444,7 @@ if __name__ == '__main__':
             with AtakOfTheCerts(CERTPWD) as aotc:
                 IP = str(input("Enter IP address or FQDN that clients will use to connect to FTS: "))
                 aotc.bake(common_name=IP, cert="server")
-                server_p12 = "./" + IP + ".p12"
+                server_p12 = f"./{IP}.p12"
             copy_question = input("Would you like to copy the server certificate files where needed for FTS? y/n ")
             if copy_question.lower() == "y":
                 aotc.copy_server_certs(server_name=IP)
@@ -408,7 +456,7 @@ if __name__ == '__main__':
                     if len(cn) == 0:
                         break
                     aotc.bake(cn, cert="user")
-                    users_p12.append("./" + cn + ".p12")
+                    users_p12.append(f"./{cn}.p12")
                     cont = input("Generate another? y/n ")
                     if cont.lower() != "y":
                         break
