@@ -1,5 +1,6 @@
-#!/usr/bin/python
+# !/usr/bin/python
 import subprocess
+
 try:
     from OpenSSL import crypto
 except ImportError:
@@ -11,6 +12,7 @@ import os
 import random
 from shutil import copyfile
 import uuid
+
 try:
     from jinja2 import Template
 except ImportError:
@@ -19,6 +21,7 @@ except ImportError:
 import socket
 import zipfile
 import shutil
+
 try:
     import requests
 except ImportError:
@@ -26,7 +29,18 @@ except ImportError:
 import hashlib
 
 
-def revoke_certificate(ca_pem, ca_key, revoked_file, crl_file, user_cert_dir, username):
+def _utc_time_from_datetime(date):
+    fmt = '%y%m%d%H%M'
+    if date.second > 0:
+        fmt += '%S'
+    if date.tzinfo is None:
+        fmt += 'Z'
+    else:
+        fmt += '%z'
+    return date.strftime(fmt)
+
+
+def revoke_certificate(ca_pem, ca_key, revoked_file, crl_file, user_cert_dir, username, crl_path=None):
     """
     Function to create/update a CRL with revoked user certificates
     :param ca_pem: The path to your CA PEM file
@@ -35,42 +49,60 @@ def revoke_certificate(ca_pem, ca_key, revoked_file, crl_file, user_cert_dir, us
     :param crl_file: Path to CRL file
     :param user_cert_dir: Path to director containing all issued user PEM files
     :param username: the username to Revoke
+    :param crl_path: The path to your previous CRL file to be loaded and updated
     :return: bool
     """
-    from crlbuilder import CertificateListBuilder
-    from datetime import datetime
-    import pytz
+
     import os
-    from oscrypto import asymmetric
-    from cryptography import x509
-    from cryptography.hazmat.backends import default_backend
     import json
-    private_key = asymmetric.load_private_key(ca_key, None)
-    certificate = asymmetric.load_certificate(ca_pem)
-    builder = CertificateListBuilder("", certificate, 1)
+    from OpenSSL import crypto
+    from datetime import datetime
     data = {}
-    if os.path.exists(revoked_file):
-        with open(revoked_file, 'r') as json_file:
-            data = json.load(json_file)
+    certificate = crypto.load_certificate(crypto.FILETYPE_PEM, open(ca_pem, mode="rb").read())
+    private_key = crypto.load_privatekey(crypto.FILETYPE_PEM, open(ca_key, mode="r").read())
+    if crl_path:
+        crl = crypto.load_crl(crypto.FILETYPE_PEM, open(crl_path, mode="rb").read())
+    else:
+        crl = crypto.CRL()
+        if os.path.exists(revoked_file):
+            with open(revoked_file, 'r') as json_file:
+                data = json.load(json_file)
+
     for cert in os.listdir(user_cert_dir):
         if cert.lower() == f"{username.lower()}.pem":
             with open(cert, 'rb') as cert:
-                certb = cert.read()
-            cert = x509.load_pem_x509_certificate(certb, default_backend())
-            data[str(cert.serial_number)] = username
+                revoked_cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert.read())
+            data[str(revoked_cert.get_serial_number())] = username
+            break
 
     for key in data:
-        revoked_time = datetime.utcnow().replace(tzinfo=pytz.utc)
-        builder.add_certificate(int(key), revoked_time, 'key_compromise')
-
-    certificate_list = builder.build(private_key)
+        revoked_time = _utc_time_from_datetime(datetime.utcnow())
+        revoked = crypto.Revoked()
+        revoked.set_serial(format(int(key), "02x").encode())
+        revoked.set_rev_date(bytes(revoked_time, encoding='utf8'))
+        crl.add_revoked(revoked)
+    crl.sign(certificate, private_key, b"sha256")
 
     with open(revoked_file, 'w+') as json_file:
         json.dump(data, json_file)
 
     with open(crl_file, 'wb') as f:
-        f.write(certificate_list.dump())
-    return True
+        f.write(crl.export(cert=certificate, key=private_key, digest=b"sha256"))
+
+    delete = 0
+    with open(ca_pem, "r") as f:
+        lines = f.readlines()
+    with open(ca_pem, "w") as f:
+        for line in lines:
+            if delete:
+                continue
+            elif line.strip("\n") != "-----BEGIN X509 CRL-----":
+                f.write(line)
+            else:
+                delete = 1
+
+    with open(ca_pem, "ab") as f:
+        f.write(crl.export(cert=certificate, key=private_key, digest=b"sha256"))
 
 
 def send_data_package(server: str, dp_name: str = "user.zip") -> bool:
@@ -247,11 +279,6 @@ class AtakOfTheCerts:
             cert.gmtime_adj_notBefore(0)
             cert.gmtime_adj_notAfter(expiry_time_secs)
             cert.set_issuer(cert.get_subject())
-            cert.add_extensions([crypto.X509Extension(b'basicConstraints', False, b'CA:TRUE'),
-                                 crypto.X509Extension(b'keyUsage', False, b'keyCertSign, cRLSign'),
-                                 crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash", subject=cert),
-                                 ])
-
             cert.set_pubkey(ca_key)
             cert.sign(ca_key, "sha256")
 
@@ -306,6 +333,9 @@ class AtakOfTheCerts:
         cert.set_pubkey(self.key)
         cert.set_version(2)
         cert.sign(ca_key, "sha256")
+        cert.add_extensions([
+                             crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash", subject=cert),
+                             ])
         p12 = crypto.PKCS12()
         p12.set_privatekey(self.key)
         p12.set_certificate(cert)
@@ -361,6 +391,9 @@ class AtakOfTheCerts:
         print(f"Copying ./{server_name}.pem to : {Mainconfig.MainConfig.pemDir}")
         copyfile(f"./{server_name}.pem", Mainconfig.MainConfig.pemDir)
         print("Done")
+        print(f"Copying ./{server_name}.p12 to : {Mainconfig.MainConfig.p12Dir}")
+        copyfile(f"./{server_name}.p12", Mainconfig.MainConfig.p12Dir)
+        print("Done")
         print(f"Copying ./ca.pem to : {Mainconfig.MainConfig.CA}")
         copyfile("./ca.pem", Mainconfig.MainConfig.CA)
         print("Done")
@@ -384,7 +417,7 @@ class AtakOfTheCerts:
 
 
 if __name__ == '__main__':
-    VERSION = "0.6"
+    VERSION = "0.6.5"
     help_txt = "This Python script is to be used to generate the certificate files needed for \n" \
                "FTS Version 1.3 and above to allow for SSL/TLS connections between Server and \n" \
                "Client.\n\n" \
