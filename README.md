@@ -1,8 +1,7 @@
 # ATAK-Certs
-## This Tool has now been integrated into FTS 1.5. so you shouldn't need this any longer
+## This Tool has now been integrated into Taky and FTS so you shouldn't need to run it separately 
 
-Tool for creating Certificate files and Client Data Packages for FTS
-###### If you are looking for the FreeTAKServer-Installer Script see [here](https://github.com/lennisthemenace/FreeTAKServer-Installer)
+Tool for creating Certificate files and Client Data Packages for Taky/FTS
 
 ### Command-Line Arguments
 `-h` `--help` : to open help
@@ -20,7 +19,7 @@ if this is used skip step 5 in How to
 
 ## How To
 ### Step 1:
-Connect you your FTS instance via SSH, For this I suggest using MobaXterm found here https://mobaxterm.mobatek.net/ This
+Connect you your server instance via SSH, For this I suggest using MobaXterm found here https://mobaxterm.mobatek.net/ This
 is great because it opens an SFTP session to the server too needed for copying files from the server.
 
 ### Step 2:
