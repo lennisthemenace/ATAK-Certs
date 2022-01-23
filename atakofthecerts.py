@@ -336,6 +336,15 @@ class AtakOfTheCerts:
         cert.add_extensions([
                              crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash", subject=cert),
                              ])
+
+        # SAN is checked for https:// links
+        if common_name[:2].isnumeric():
+            subjectAltName = b"IP.1:"+common_name.encode()
+        else:
+            subjectAltName = b"DNS:"+common_name.encode()
+        cert.add_extensions([
+                             crypto.X509Extension(b'subjectAltName', False, subjectAltName)
+                             ])                             
         p12 = crypto.PKCS12()
         p12.set_privatekey(self.key)
         p12.set_certificate(cert)
