@@ -1,6 +1,7 @@
 # !/usr/bin/python
 import subprocess
 import datetime
+import ipaddress
 try:
     import cryptography
 except ImportError:
@@ -341,16 +342,16 @@ class AtakOfTheCerts:
         cert = cert.serial_number(x509.random_serial_number())
         cert = cert.not_valid_before(datetime.datetime.today() - one_day)
         cert = cert.not_valid_after(datetime.datetime.today() + (one_day * expiry_time_days))
+        ca_subject = x509.load_pem_x509_certificate(open(self.ca_pem_path, 'rb').read()).subject
         cert = cert.issuer_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME,
-                                                              str(x509.load_pem_x509_certificate(open(self.ca_pem_path, 'rb').read()).issuer))]))
+                                                              str(ca_subject.rfc4514_string().split("=")[1]))]))
         cert = cert.public_key(public_key)
         cert = cert.add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False)
         # SAN is checked for https:// links
         if common_name[:2].isnumeric():
-            san = b"IP.1:" + common_name.encode()
+            cert = cert.add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.IPv4Address(common_name))]), critical=False)
         else:
-            san = b"DNS:" + common_name.encode()
-        cert = cert.add_extension(x509.SubjectAlternativeName([x509.DNSName(str(san))]), critical=False)
+            cert = cert.add_extension(x509.SubjectAlternativeName([x509.DNSName(common_name)]), critical=False)
         cert = cert.sign(private_key=ca_key, algorithm=hashes.SHA256())
 
         p12 = pkcs12.serialize_key_and_certificates(key=self.key, cert=cert,
