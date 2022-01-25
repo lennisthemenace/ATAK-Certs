@@ -1,18 +1,21 @@
 # !/usr/bin/python
 import subprocess
-
+import datetime
 try:
-    from OpenSSL import crypto
+    import cryptography
 except ImportError:
-    subprocess.run(["pip3", "install", "pyopenssl"], capture_output=True)
-    from OpenSSL import crypto
+    subprocess.run(["pip3", "install", "cryptography"], capture_output=True)
+import cryptography.x509 as x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import pkcs12
 import getopt
 import sys
 import os
-import random
 from shutil import copyfile
 import uuid
-
 try:
     from jinja2 import Template
 except ImportError:
@@ -21,88 +24,86 @@ except ImportError:
 import socket
 import zipfile
 import shutil
-
 try:
     import requests
 except ImportError:
     subprocess.run(["pip3", "install", "requests"], capture_output=True)
 import hashlib
 
-
-def _utc_time_from_datetime(date):
-    fmt = '%y%m%d%H%M'
-    if date.second > 0:
-        fmt += '%S'
-    if date.tzinfo is None:
-        fmt += 'Z'
-    else:
-        fmt += '%z'
-    return date.strftime(fmt)
-
-
-def revoke_certificate(ca_pem, ca_key, revoked_file, crl_file, user_cert_dir, username, crl_path=None):
-    """
-    Function to create/update a CRL with revoked user certificates
-    :param ca_pem: The path to your CA PEM file
-    :param ca_key: The Path to your CA key file
-    :param revoked_file: Path to JSON file to be used as a DB for revocation
-    :param crl_file: Path to CRL file
-    :param user_cert_dir: Path to director containing all issued user PEM files
-    :param username: the username to Revoke
-    :param crl_path: The path to your previous CRL file to be loaded and updated
-    :return: bool
-    """
-
-    import os
-    import json
-    from OpenSSL import crypto
-    from datetime import datetime
-    data = {}
-    certificate = crypto.load_certificate(crypto.FILETYPE_PEM, open(ca_pem, mode="rb").read())
-    private_key = crypto.load_privatekey(crypto.FILETYPE_PEM, open(ca_key, mode="r").read())
-    if crl_path:
-        crl = crypto.load_crl(crypto.FILETYPE_PEM, open(crl_path, mode="rb").read())
-    else:
-        crl = crypto.CRL()
-        if os.path.exists(revoked_file):
-            with open(revoked_file, 'r') as json_file:
-                data = json.load(json_file)
-
-    for cert in os.listdir(user_cert_dir):
-        if cert.lower() == f"{username.lower()}.pem":
-            with open(cert, 'rb') as cert:
-                revoked_cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert.read())
-            data[str(revoked_cert.get_serial_number())] = username
-            break
-
-    for key in data:
-        revoked_time = _utc_time_from_datetime(datetime.utcnow())
-        revoked = crypto.Revoked()
-        revoked.set_serial(format(int(key), "02x").encode())
-        revoked.set_rev_date(bytes(revoked_time, encoding='utf8'))
-        crl.add_revoked(revoked)
-    crl.sign(certificate, private_key, b"sha256")
-
-    with open(revoked_file, 'w+') as json_file:
-        json.dump(data, json_file)
-
-    with open(crl_file, 'wb') as f:
-        f.write(crl.export(cert=certificate, key=private_key, digest=b"sha256"))
-
-    delete = 0
-    with open(ca_pem, "r") as f:
-        lines = f.readlines()
-    with open(ca_pem, "w") as f:
-        for line in lines:
-            if delete:
-                continue
-            elif line.strip("\n") != "-----BEGIN X509 CRL-----":
-                f.write(line)
-            else:
-                delete = 1
-
-    with open(ca_pem, "ab") as f:
-        f.write(crl.export(cert=certificate, key=private_key, digest=b"sha256"))
+# def _utc_time_from_datetime(date):
+#     fmt = '%y%m%d%H%M'
+#     if date.second > 0:
+#         fmt += '%S'
+#     if date.tzinfo is None:
+#         fmt += 'Z'
+#     else:
+#         fmt += '%z'
+#     return date.strftime(fmt)
+#
+# def revoke_certificate(ca_pem, ca_key, revoked_file, crl_file, user_cert_dir, username, crl_path=None):
+#     """
+#     Function to create/update a CRL with revoked user certificates
+#     :param ca_pem: The path to your CA PEM file
+#     :param ca_key: The Path to your CA key file
+#     :param revoked_file: Path to JSON file to be used as a DB for revocation
+#     :param crl_file: Path to CRL file
+#     :param user_cert_dir: Path to director containing all issued user PEM files
+#     :param username: the username to Revoke
+#     :param crl_path: The path to your previous CRL file to be loaded and updated
+#     :return: bool
+#     """
+#
+#     import os
+#     import json
+#  #   from OpenSSL import crypto
+#     from datetime import datetime
+#     data = {}
+#     certificate = crypto.load_certificate(crypto.FILETYPE_PEM, open(ca_pem, mode="rb").read())
+#     private_key = crypto.load_privatekey(crypto.FILETYPE_PEM, open(ca_key, mode="r").read())
+#     if crl_path:
+#         crl = crypto.load_crl(crypto.FILETYPE_PEM, open(crl_path, mode="rb").read())
+#     else:
+#         crl = crypto.CRL()
+#         if os.path.exists(revoked_file):
+#             with open(revoked_file, 'r') as json_file:
+#                 data = json.load(json_file)
+#
+#     for cert in os.listdir(user_cert_dir):
+#         if cert.lower() == f"{username.lower()}.pem":
+#             with open(cert, 'rb') as cert:
+#                 revoked_cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert.read())
+#             data[str(revoked_cert.get_serial_number())] = username
+#             break
+#
+#     for key in data:
+#         revoked_time = _utc_time_from_datetime(datetime.utcnow())
+#         revoked = crypto.Revoked()
+#         revoked.set_serial(format(int(key), "02x").encode())
+#         revoked.set_rev_date(bytes(revoked_time, encoding='utf8'))
+#         crl.add_revoked(revoked)
+#     crl.sign(certificate, private_key, b"sha256")
+#
+#     with open(revoked_file, 'w+') as json_file:
+#         json.dump(data, json_file)
+#
+#     with open(crl_file, 'wb') as f:
+#         f.write(crl.export(cert=certificate, key=private_key, digest=b"sha256"))
+#
+#     delete = 0
+#     with open(ca_pem, "r") as f:
+#         lines = f.readlines()
+#     with open(ca_pem, "w") as f:
+#         for line in lines:
+#             if delete:
+#                 continue
+#             elif line.strip("\n") != "-----BEGIN X509 CRL-----":
+#                 f.write(line)
+#             else:
+#                 delete = 1
+#
+#     with open(ca_pem, "ab") as f:
+#         f.write(crl.export(cert=certificate, key=private_key, digest=b"sha256"))
+#
 
 
 def send_data_package(server: str, dp_name: str = "user.zip") -> bool:
@@ -253,7 +254,10 @@ class AtakOfTheCerts:
         """
         :param pwd: String based password used to secure the p12 files generated, defaults to atakatak
         """
-        self.key = crypto.PKey()
+        self.key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+        )
         self.cert_pwd = pwd
         self.ca_key_path = "./ca.key"
         self.ca_pem_path = "./ca.pem"
@@ -264,32 +268,38 @@ class AtakOfTheCerts:
     def __exit__(self, exc_type, exc_val, exc_tb):
         return None
 
-    def generate_ca(self, expiry_time_secs: int = 31536000) -> None:
+    def generate_ca(self, expiry_time_days: int = 3650) -> None:
         """
         Generate a CA certificate
         """
         if not os.path.exists(self.ca_key_path):
             print("Cannot find CA locally so generating one")
-            ca_key = crypto.PKey()
-            ca_key.generate_key(crypto.TYPE_RSA, 2048)
-            cert = crypto.X509()
-            cert.get_subject().CN = "CA"
-            cert.set_serial_number(0)
-            cert.set_version(2)
-            cert.gmtime_adj_notBefore(0)
-            cert.gmtime_adj_notAfter(expiry_time_secs)
-            cert.set_issuer(cert.get_subject())
-            cert.set_pubkey(ca_key)
-            cert.sign(ca_key, "sha256")
+            one_day = datetime.timedelta(1, 0, 0)
+            private_key = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=2048,
+            )
+            public_key = private_key.public_key()
+            cert = x509.CertificateBuilder()
+            cert = cert.subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, u'CA')]))
+            cert = cert.serial_number(x509.random_serial_number())
+            cert = cert.not_valid_before(datetime.datetime.today() - one_day)
+            cert = cert.not_valid_after(datetime.datetime.today() + (one_day * expiry_time_days))
+            cert = cert.issuer_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, u'CA')]))
+            cert = cert.public_key(public_key)
+            cert = cert.sign(private_key=private_key, algorithm=hashes.SHA256())
 
-            f = open(self.ca_key_path, "wb")
-            f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, ca_key))
-            f.close()
+            private_pem = private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption())
+
+            with open(self.ca_key_path, "wb") as f:
+                f.write(private_pem)
             print(f"CA key Stored Here: {self.ca_key_path}")
 
-            f = open(self.ca_pem_path, "wb")
-            f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
-            f.close()
+            with open("ca.pem", "wb") as f:
+                f.write(cert.public_bytes(serialization.Encoding.PEM))
             print(f"CA pem Stored Here: {self.ca_pem_path}")
         else:
             print("CA found locally, not generating a new one")
@@ -305,53 +315,53 @@ class AtakOfTheCerts:
             sys.exit(1)
         else:
             print("Generating Key...")
-            self.key.generate_key(crypto.TYPE_RSA, 2048)
-            f = open(key_path, "wb")
-            f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, self.key))
-            f.close()
+            private_pem = self.key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption())
+
+            with open(key_path, "wb") as f:
+                f.write(private_pem)
             print(f"Key Stored Here: {key_path}")
 
     def _generate_certificate(self, common_name: str, pem_path: str, p12path: str,
-                              expiry_time_secs: int = 31536000) -> None:
+                              expiry_time_days: int = 3650) -> None:
         """
         Create a certificate and p12 file
         :param common_name: Common Name for certificate
         :param pem_path: String filepath for the pem file created
         :param p12path: String filepath for the p12 file created
-        :param expiry_time_secs: length of time in seconds that the certificate is valid for, defaults to 1 year
+        :param expiry_time_days: length of time in seconds that the certificate is valid for, defaults to 10 years
         """
-        ca_key = crypto.load_privatekey(crypto.FILETYPE_PEM, open(self.ca_key_path).read())
-        ca_pem = crypto.load_certificate(crypto.FILETYPE_PEM, open(self.ca_pem_path, 'rb').read())
-        serial_number = random.getrandbits(64)
-        chain = (ca_pem,)
-        cert = crypto.X509()
-        cert.get_subject().CN = common_name
-        cert.set_serial_number(serial_number)
-        cert.gmtime_adj_notBefore(0)
-        cert.gmtime_adj_notAfter(expiry_time_secs)
-        cert.set_issuer(ca_pem.get_subject())
-        cert.set_pubkey(self.key)
-        cert.set_version(2)
-        cert.sign(ca_key, "sha256")
-        cert.add_extensions([
-                             crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash", subject=cert),
-                             ])
-
+        ca_key = serialization.load_pem_private_key(open(self.ca_key_path, 'rb').read(), None, default_backend())
+        one_day = datetime.timedelta(1, 0, 0)
+        public_key = self.key.public_key()
+        cert = x509.CertificateBuilder()
+        cert = cert.subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)]))
+        cert = cert.serial_number(x509.random_serial_number())
+        cert = cert.not_valid_before(datetime.datetime.today() - one_day)
+        cert = cert.not_valid_after(datetime.datetime.today() + (one_day * expiry_time_days))
+        cert = cert.issuer_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME,
+                                                              str(x509.load_pem_x509_certificate(open(self.ca_pem_path, 'rb').read()).issuer))]))
+        cert = cert.public_key(public_key)
+        cert = cert.add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False)
         # SAN is checked for https:// links
         if common_name[:2].isnumeric():
-            subjectAltName = b"IP.1:"+common_name.encode()
+            san = b"IP.1:" + common_name.encode()
         else:
-            subjectAltName = b"DNS:"+common_name.encode()
-        cert.add_extensions([
-                             crypto.X509Extension(b'subjectAltName', False, subjectAltName)
-                             ])                             
-        p12 = crypto.PKCS12()
-        p12.set_privatekey(self.key)
-        p12.set_certificate(cert)
-        p12.set_ca_certificates(tuple(chain))
-        p12data = p12.export(passphrase=bytes(self.cert_pwd, encoding='UTF-8'))
+            san = b"DNS:" + common_name.encode()
+        cert = cert.add_extension(x509.SubjectAlternativeName([x509.DNSName(str(san))]), critical=False)
+        cert = cert.sign(private_key=ca_key, algorithm=hashes.SHA256())
+
+        p12 = pkcs12.serialize_key_and_certificates(key=self.key, cert=cert,
+                                                    cas=[x509.load_pem_x509_certificate(
+                                                        open(self.ca_pem_path, 'rb').read())],
+                                                    name=b'certbundle',
+                                                    encryption_algorithm=serialization.BestAvailableEncryption(
+                                                        bytes(self.cert_pwd, encoding='UTF-8')))
+
         with open(p12path, 'wb') as p12file:
-            p12file.write(p12data)
+            p12file.write(p12)
             print("P12 Stored Here: " + p12path)
 
         if os.path.exists(pem_path):
@@ -359,22 +369,22 @@ class AtakOfTheCerts:
             print(pem_path)
         else:
             f = open(pem_path, "wb")
-            f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
             f.close()
             print(f"PEM Stored Here: {pem_path}")
 
-    def bake(self, common_name: str, cert: str = "user", expiry_time_secs: int = 31536000) -> None:
+    def bake(self, common_name: str, cert: str = "user", expiry_time_days: int = 3650) -> None:
         """
         Wrapper for creating certificate and all files needed
         :param common_name: Common Name of the the certificate
         :param cert: Type of cert being created "user" or "server"
-        :param expiry_time_secs: length of time in seconds that the certificate is valid for, defaults to 1 year
+        :param expiry_time_days: length of time in seconds that the certificate is valid for, defaults to 10 years
         """
         keypath = f"./{common_name}.key"
         pempath = f"./{common_name}.pem"
         p12path = f"./{common_name}.p12"
         self._generate_key(keypath)
-        self._generate_certificate(common_name, pempath, p12path, expiry_time_secs)
+        self._generate_certificate(common_name, pempath, p12path, expiry_time_days)
         if cert.lower() == "server":
             copyfile(keypath, keypath + ".unencrypted")
 
@@ -389,8 +399,6 @@ class AtakOfTheCerts:
         except ImportError:
             print("Cannot import FTS, it must not be installed on this machine. cannot continue")
             exit(0)
-        # if not os.path.exists(Mainconfig.MainConfig.certsPath):
-        #     os.makedirs(Mainconfig.MainConfig.certsPath)
         print(f"Copying ./{server_name}.key to : {Mainconfig.MainConfig.keyDir}")
         copyfile(f"./{server_name}.key", Mainconfig.MainConfig.keyDir)
         print("Done")
@@ -410,15 +418,15 @@ class AtakOfTheCerts:
         copyfile("./ca.key", Mainconfig.MainConfig.CAkey)
         print("Done")
 
-    def generate_auto_certs(self, ip: str, copy: bool = False, expiry_time_secs: int = 31536000) -> None:
+    def generate_auto_certs(self, ip: str, copy: bool = False, expiry_time_days: int = 3650) -> None:
         """
         Generate the basic files needed for a new install of FTS
         :param ip: A string based ip address or FQDN that clients will use to connect to the server
         :param copy: Whether to copy server files to FTS expected locations
-        :param expiry_time_secs: length of time in seconds that the certificate is valid for, defaults to 1 year
+        :param expiry_time_days: length of time in seconds that the certificate is valid for, defaults to 10 years
         """
-        self.bake("pubserver", "server", expiry_time_secs)
-        self.bake("user", "user", expiry_time_secs)
+        self.bake("pubserver", "server", expiry_time_days)
+        self.bake("user", "user", expiry_time_days)
         if copy is True:
             self.copy_server_certs()
         generate_zip(server_address=ip)
@@ -426,16 +434,16 @@ class AtakOfTheCerts:
 
 
 if __name__ == '__main__':
-    VERSION = "0.6.5"
+    VERSION = "0.7"
     help_txt = "This Python script is to be used to generate the certificate files needed for \n" \
-               "FTS Version 1.3 and above to allow for SSL/TLS connections between Server and \n" \
+               "Taky and FTS (Version 1.3 and above) to allow for SSL/TLS connections between Server and \n" \
                "Client.\n\n" \
                "This script works in the current working directory (the folder you are \n" \
                "currently in)\n\n" \
                "The .p12 files generated will need to be copied to ATAK clients\n" \
                "the default password set on the .p12 files is atakatak\n" \
-               "The Server .key and .pem file will ne needed on the FTS server as per the MainConfig.py\n" \
-               "The ca.pem is also needed for the MainConfig.py\n" \
+               "The Server .key and .pem file will be needed on the server (Taky or FTS)\n" \
+               "The ca.pem is also needed for the server\n" \
                "the default password set on the .p12 files is atakatak, this can be overridden\n\n" \
                "Arguments:\n" \
                "-h --help : to open help\n" \
@@ -484,7 +492,7 @@ if __name__ == '__main__':
         server_question = input("Would you like to generate a server certificate? y/n ")
         if server_question.lower() == "y":
             with AtakOfTheCerts(CERTPWD) as aotc:
-                IP = str(input("Enter IP address or FQDN that clients will use to connect to FTS: "))
+                IP = str(input("Enter IP address or FQDN that clients will use to connect to your TAK Server: "))
                 aotc.bake(common_name=IP, cert="server")
                 server_p12 = f"./{IP}.p12"
             copy_question = input("Would you like to copy the server certificate files where needed for FTS? y/n ")
