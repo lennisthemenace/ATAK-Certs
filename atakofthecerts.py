@@ -173,7 +173,7 @@ def generate_zip(server_address: str = None, server_filename: str = "pubserver.p
           <Parameter name="onReceiveDelete" value="true"/>
        </Configuration>
        <Contents>
-          <Content ignore="false" zipEntry="{{ folder }}/fts.pref"/>
+          <Content ignore="false" zipEntry="{{ folder }}/preference.pref"/>
           <Content ignore="false" zipEntry="{{ folder }}/{{ server_filename }}"/>
           <Content ignore="false" zipEntry="{{ folder }}/{{ user_filename }}"/>	  
        </Contents>
@@ -211,7 +211,7 @@ def generate_zip(server_address: str = None, server_filename: str = "pubserver.p
         os.makedirs(f"./{folder}")
     if not os.path.exists("./MANIFEST"):
         os.makedirs("./MANIFEST")
-    with open(f'./{folder}/fts.pref', 'w') as pref_file:
+    with open(f'./{folder}/preference.pref', 'w') as pref_file:
         pref_file.write(pref)
     with open('./MANIFEST/manifest.xml', 'w') as manifest_file:
         manifest_file.write(man)
@@ -421,7 +421,7 @@ class AtakOfTheCerts:
 
     def generate_auto_certs(self, ip: str, copy: bool = False, expiry_time_days: int = 3650) -> None:
         """
-        Generate the basic files needed for a new install of FTS
+        Generate the basic files needed for a new install of a server
         :param ip: A string based ip address or FQDN that clients will use to connect to the server
         :param copy: Whether to copy server files to FTS expected locations
         :param expiry_time_days: length of time in seconds that the certificate is valid for, defaults to 10 years
@@ -484,7 +484,7 @@ if __name__ == '__main__':
         aotc.generate_ca()
     if AUTO:
         if IP is False:
-            IP = str(input("Enter IP address or FQDN that clients will use to connect to FTS: "))
+            IP = str(input("Enter IP address or FQDN that clients will use to connect to the server: "))
         with AtakOfTheCerts() as aotc:
             aotc.generate_auto_certs(copy=COPY, ip=IP)
     else:
@@ -516,7 +516,7 @@ if __name__ == '__main__':
                 while server_p12 is None:
                     server_p12 = input("Enter path to server p12 file e.g ./pubserver.p12 : ")
                 while IP is False:
-                    IP = str(input("Enter IP address or FQDN that clients will use to connect to FTS: "))
+                    IP = str(input("Enter IP address or FQDN that clients will use to connect to the server: "))
                 for user in users_p12:
                     generate_zip(server_address=IP, server_filename=server_p12, user_filename=user)
                     send_zip_question = input("Would you like to upload the Data Packages? y/n ")
