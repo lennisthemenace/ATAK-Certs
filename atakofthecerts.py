@@ -137,13 +137,13 @@ def send_data_package(server: str, dp_name: str = "user.zip") -> bool:
             return False
 
 
-def generate_zip(server_address: str = None, server_filename: str = "pubserver.p12", user_filename: str = "user.p12",
+def generate_zip(server_address: str = None, server_filename: str = "truststore.p12", user_filename: str = "user.p12",
                  cert_password: str = "atakatak", ssl_port: str = "8089") -> None:
     """
     A Function to generate a Client connection Data Package (DP) from a server and user p12 file in the current
     working directory.
     :param server_address: A string based ip address or FQDN that clients will use to connect to the server
-    :param server_filename: The filename of the server p12 file default is pubserver.p12
+    :param server_filename: The filename of the server p12 file default is truststore.p12
     :param user_filename: The filename of the server p12 file default is user.p12
     :param cert_password: The password for the certificate files
     :param ssl_port: The port used for SSL CoT, defaults to 8089
@@ -390,7 +390,7 @@ class AtakOfTheCerts:
             copyfile(keypath, keypath + ".unencrypted")
 
     @staticmethod
-    def copy_server_certs(server_name: str = "pubserver") -> None:
+    def copy_server_certs(server_name: str = "truststore") -> None:
         """
         copy all the server files with of a given name to the FTS server cert location
         :param server_name: Name of the server/IP address that was used when generating the certificate
@@ -426,7 +426,7 @@ class AtakOfTheCerts:
         :param copy: Whether to copy server files to FTS expected locations
         :param expiry_time_days: length of time in seconds that the certificate is valid for, defaults to 10 years
         """
-        self.bake("pubserver", "server", expiry_time_days)
+        self.bake("truststore", "server", expiry_time_days)
         self.bake("user", "user", expiry_time_days)
         if copy is True:
             self.copy_server_certs()
@@ -514,7 +514,7 @@ if __name__ == '__main__':
             generate_zip_question = input("Would you like to generate Data Packages for each user just created? y/n ")
             if generate_zip_question.lower() == "y":
                 while server_p12 is None:
-                    server_p12 = input("Enter path to server p12 file e.g ./pubserver.p12 : ")
+                    server_p12 = input("Enter path to server p12 file e.g ./truststore.p12 : ")
                 while IP is False:
                     IP = str(input("Enter IP address or FQDN that clients will use to connect to the server: "))
                 for user in users_p12:
