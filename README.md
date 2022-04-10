@@ -1,5 +1,5 @@
 # ATAK-Certs
-## This Tool has now been integrated into Taky and FTS so you shouldn't need to run it separately 
+## This functionality has now been integrated into Taky and FTS so you shouldn't need to run it separately 
 
 Tool for creating Certificate files and Client Data Packages for [Taky](https://github.com/tkuester/taky), [OpenTakRouter](https://github.com/darkplusplus/opentakrouter) and [FTS](https://github.com/FreeTAKTeam/FreeTakServer)
 
