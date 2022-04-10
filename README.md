@@ -33,6 +33,11 @@ Run script in either Headless or Interactive mode:
 
 `curl -L https://git.io/JL9DP | sudo python3 -`
 
+If using CentOS you should split these commands out as:
+`curl -L -o cert.py https://git.io/JL9DP`
+then:
+`sudo python3 ./cert.py`
+
 If you run the script interactive, just follow the prompts
 
 ### Step 3:
